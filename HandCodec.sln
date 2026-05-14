@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F53F2054-2190-4F41-94FE-B9161788151B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HandCodec", "src\HandCodec\HandCodec.csproj", "{147F6EC5-52CD-44B7-88B5-C68A194B670E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{277D0AE9-B735-47B2-A17D-4AADA73E6116}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HandCodec.Tests", "tests\HandCodec.Tests\HandCodec.Tests.csproj", "{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{147F6EC5-52CD-44B7-88B5-C68A194B670E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{147F6EC5-52CD-44B7-88B5-C68A194B670E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{147F6EC5-52CD-44B7-88B5-C68A194B670E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{147F6EC5-52CD-44B7-88B5-C68A194B670E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{147F6EC5-52CD-44B7-88B5-C68A194B670E} = {F53F2054-2190-4F41-94FE-B9161788151B}
+		{B630EA3A-5C58-4C2A-9286-FB777A8BFBC2} = {277D0AE9-B735-47B2-A17D-4AADA73E6116}
+	EndGlobalSection
+EndGlobal
