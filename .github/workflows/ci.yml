@@ -2,10 +2,8 @@ name: .NET CI — Quality Gate
 
 on:
   push:
-    tags:
-      - "v*"
-  push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "src/**"
       - "tests/**"
