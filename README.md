@@ -1,16 +1,3 @@
----
-description: H.A.N.D. Codec (Hierarchical Adaptive Negotiation Dialect) — lightweight, resilient wire format for multi-agent LLM pipelines. Wire format optimized for small LLMs.
-doc_id: ref.hand-codec-readme
-type: ref
-status: active
-ttl_days: 365
-stability: stable
-ai_scope: editable
-last_verified: 2026-05-15
-verified_by: Pawel Maciejewski
-fitness_score: 1.0
----
-
 # HandCodec
 
 Lightweight behavioral codec for multi-agent AI pipelines. Pipe-delimited `key=value`
@@ -216,6 +203,8 @@ Domain-specific semantic names (`.EmotionalState()`, `.Severity()`, etc.) can be
 - [docs/wire-format-spec.md](docs/wire-format-spec.md) — grammar, performatives, field rules, batch boundaries
 - [docs/design-rationale.md](docs/design-rationale.md) — why pipe-delimited, why 5 levels, why 4 AgentClasses
 - [examples/README.md](examples/README.md) — runnable usage patterns
+
+Documentation follows the [AI-First Documentation Standard (AFDS)](https://github.com/paulomac1000/ai-skills/tree/main/skills/afds-doc-writer).
 
 ## Building and testing
 

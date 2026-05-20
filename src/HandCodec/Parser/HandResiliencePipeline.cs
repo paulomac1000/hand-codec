@@ -24,8 +24,8 @@ public sealed record ResilienceResult(int Level, ParsedHandMessage Message, long
 /// <summary>Single stage in the degradation ladder.</summary>
 public interface IHandParsingStage
 {
-    string Name { get; }
-    ParsedHandMessage? Execute(string raw, HandResilientOptions opts);
+    public string Name { get; }
+    public ParsedHandMessage? Execute(string raw, HandResilientOptions opts);
 }
 
 /// <summary>

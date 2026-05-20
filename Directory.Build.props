@@ -9,10 +9,11 @@
     
     <!-- Quality Gates -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <MSBuildTreatWarningsAsErrors>false</MSBuildTreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-All</AnalysisLevel>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn> <!-- Disable missing XML comment warnings globally -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
 
     <!-- NuGet Metadata -->
     <Authors>Pawel Maciejewski</Authors>
