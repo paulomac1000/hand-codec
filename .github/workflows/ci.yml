@@ -1,45 +1,190 @@
-name: CI
+name: .NET CI — Quality Gate
 
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Directory.Build.props"
+    tags:
+      - "v*"
   pull_request:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Directory.Build.props"
+  workflow_dispatch:
+
+concurrency:
+  group: dotnet-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-test:
+  dotnet-build-test:
+    name: Build, Test & Coverage
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.x
+          dotnet-version: "8.0.x"
 
-      - name: Restore
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-
+
+      - name: Restore dependencies
         run: dotnet restore HandCodec.sln
 
-      - name: Build
+      - name: Verify code formatting
+        run: dotnet format HandCodec.sln --no-restore --verify-no-changes
+
+      - name: Build solution
         run: dotnet build HandCodec.sln --no-restore -c Release
 
-      - name: Test
-        run: dotnet test HandCodec.sln --no-build -c Release --logger trx
+      - name: Test & collect coverage
+        run: |
+          dotnet test HandCodec.sln --no-build -c Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --logger trx
 
-  pack:
-    needs: build-test
+      - name: Install ReportGenerator
+        if: always()
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.4.0
+
+      - name: Generate coverage report
+        if: always()
+        continue-on-error: true
+        run: |
+          reportgenerator \
+            -reports:"**/TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"Html;MarkdownSummaryGithub;JsonSummary" \
+            -assemblyfilters:"+HandCodec;+HandRuntime"
+
+      - name: Coverage gate
+        if: always() && hashFiles('coverage-report/Summary.json') != ''
+        run: |
+          echo "Checking coverage thresholds..."
+          python3 -c "
+          import json, sys, os
+          with open('coverage-report/Summary.json', 'r') as f:
+              data = json.load(f)
+          summary = data.get('summary', data)
+          line = summary.get('linecoverage', 0)
+          branch = summary.get('branchcoverage', 0)
+          print(f'Line coverage: {line:.1f}% (threshold: 75%)')
+          print(f'Branch coverage: {branch:.1f}% (threshold: 60%)')
+          failed = False
+          if line < 75:
+              print(f'FAIL: Line coverage {line:.1f}% below 75% threshold')
+              failed = True
+          if branch < 60:
+              print(f'FAIL: Branch coverage {branch:.1f}% below 60% threshold')
+              failed = True
+          if failed:
+              sys.exit(1)
+          print('SUCCESS: Coverage thresholds met')
+          "
+
+      - name: Publish test results to PR
+        if: always() && hashFiles('TestResults/**/*.trx') != ''
+        uses: dorny/test-reporter@v3
+        with:
+          name: Unit Tests
+          path: "TestResults/**/*.trx"
+          reporter: dotnet-trx
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            TestResults/
+            coverage-report/
+          retention-days: 14
+
+      - name: Post coverage summary to PR
+        if: github.event_name == 'pull_request' && always() && hashFiles('coverage-report/SummaryGithub.md') != ''
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          path: coverage-report/SummaryGithub.md
+
+  pack-publish:
+    name: Pack & Publish
+    needs: dotnet-build-test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.x
+          dotnet-version: "8.0.x"
 
-      - name: Pack
-        run: dotnet pack src/HandCodec/HandCodec.csproj -c Release --no-build -o ./nupkg
+      - name: Extract version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Publish to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+      - name: Restore dependencies
+        run: dotnet restore HandCodec.sln
+
+      - name: Build solution
+        run: dotnet build HandCodec.sln --no-restore -c Release
+
+      - name: Pack NuGet packages
+        run: dotnet pack HandCodec.sln --no-build -c Release -o ./nupkg -p:PackageVersion=${{ env.VERSION }}
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nupkg/*
+          retention-days: 1
+
+      - name: Publish to GitHub Packages
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --skip-duplicate
+
+      - name: Extract release notes
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          awk '/^## \['"${VERSION}"'\]/{flag=1; next} /^## \[/{if(flag) exit} flag' CHANGELOG.md > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          body_path: release_notes.md
+          files: ./nupkg/*
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

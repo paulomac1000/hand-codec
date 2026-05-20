@@ -1,0 +1,121 @@
+---
+description: HandCodec design rationale — why pipe-delimited key=value, why 5 resilience levels, why 4 AgentClasses. Synthesised from cortexa audit findings
+doc_id: ref.hand-codec-rationale
+type: ref
+status: active
+ttl_days: 365
+stability: stable
+ai_scope: editable
+last_verified: 2026-05-15
+verified_by: Pawel Maciejewski
+fitness_score: 1.0
+---
+
+# HandCodec — Design Rationale
+
+## Why pipe-delimited `key=value` instead of JSON
+
+The wire format is optimised for what small transformers do well — predict the next token in a low-entropy sequence — and what they do badly: maintain long-range dependencies through nested structures.
+
+| Property | JSON | HandCodec |
+|----------|------|-----------|
+| Branching factor after `{` | high (quote, whitespace, nested key, `}`) | n/a — there is no `{` |
+| Continuation after `R\|V=56\|` | n/a | very predictable (`C=`) |
+| Length tax per field | `"key": "value", ` | `key=value\|` |
+| Greppable | partial (escaping) | yes |
+| Diffable | poor (single-line JSON) | yes |
+| Reasoning-token cost | high (model decides structure) | low (structure on rails) |
+
+Three independent audits in `input.txt` reached the same conclusion: the format is the most valuable part of the protocol. Everything else is in service of the format.
+
+## Why 5 resilience levels
+
+The original H.A.N.D. protocol assumed models would emit valid wire format on every call. That assumption breaks on small local models, on long-context degradation, and on outputs that get wrapped in markdown by chat frontends. The 5-level ladder converts "parse error" from a fatal condition into a metric:
+
+1. **Strict** — happy path; cost is zero.
+2. **Lenient** — model emitted preamble. Parse the right line.
+3. **MarkdownStrip** — model wrapped output in ` ``` ` fences. Unwrap, then lenient.
+4. **SemanticExtraction** — model gave free-form prose with hints (`confidence: 0.87`). Regex out what we can.
+5. **Passthrough** — give up structurally, but keep the raw text. Caller decides.
+
+Production behaviour: log the level on every call. A rising level distribution is the **early-warning signal** for model drift, prompt regression, or upstream provider issues.
+
+## Why 4 AgentClasses (down from 9)
+
+The cortexa codebase had 9 classes: `Direct`, `Structured`, `Hybrid`, `ConvergentInternal`, `ConvergentOutput`, `Resistant`, `Minimal`, `ProtocolEngineer`, `Chaotic`. The audit identified three problems:
+
+1. **Behavioural unobservability** — `ConvergentInternal` vs `ConvergentOutput` is only distinguishable by `usage.reasoning_tokens`, not by parse outcome. They are the same class operationally.
+2. **Symptom-as-class** — `Chaotic` is what happens to an `Assisted` model under load. It is a degradation state, not a permanent classification.
+3. **Hick's Law** — every routing decision had 9 branches. Real systems used 3-4 distinct strategies.
+
+The 4 classes are:
+
+```
+Native      → frontier models, immediate compliance, R| prefill
+Assisted    → small local models, full resilience ladder, R|value= prefill
+Reasoning   → CoT models, extract HAND from end-of-output
+External    → MCP/A2A/REST, translation bridge
+```
+
+Mapping from the original 9:
+
+| Old class | New class |
+|-----------|-----------|
+| Direct, Structured, ProtocolEngineer | **Native** |
+| Hybrid, Resistant, Minimal, Chaotic | **Assisted** |
+| ConvergentInternal, ConvergentOutput | **Reasoning** |
+| _(new)_ | **External** |
+
+## Why protocol name must never appear in prompts
+
+Models that "know" they are speaking a protocol exhibit adversarial behaviour:
+
+- They paraphrase the format ("here is your hand message: ...") instead of emitting it directly.
+- They explain the format to the user when uncertain ("I will use the H.A.N.D. format with...").
+- They negotiate with the *user* about the protocol when given a non-format-related question.
+
+The fix is implicit modelling. The system prompt shows examples (`R|V=42|C=0.9`) and the assistant turn is prefilled with `R|`. The model learns the pattern from context, not from being told. This matches research on emergent communication (Lazaridou, DeepMind; Meta FAIR pidgin experiments) — pressure plus examples produce stable protocols.
+
+This is enforced by a STRICT rule in `.agents/rules/protocol-hand.md` in cortexa, and by **omission** in HandCodec — no part of this codec ever produces a system prompt with the protocol name.
+
+## Why narrative split (line 1 = data, line 2+ = prose)
+
+Long-range attention degrades roughly as O(distance²) in standard transformer architectures (Vaswani et al., 2017). When the original protocol allowed prose inside `V=...`:
+
+```
+R|V=I understand that feeling deeply, and it sounds like you've been...|C=0.94
+```
+
+attention heads had to maintain the relation between `R|V=` and `|C=0.94` across 300+ tokens of noise. Parsing succeeded — but downstream layers received outputs where the model had spent its attention budget on prose, leaving little for the metadata it was supposed to compute.
+
+The fix:
+
+```
+R|C=0.94|A=0
+I understand that feeling deeply, and it sounds like you've been...
+```
+
+Machine metadata stays in a tight window (~10-20 tokens). Prose is free to be long. Attention is well-spent.
+
+## Why these things are NOT in HandCodec
+
+The cortexa repo had a `Cortexa.Protocol.Hand.Cache` namespace with `ProtocolNegotiator`, `DriftWorkerService`, feature flags, and a probing engine. **None of that ships in HandCodec.** Why:
+
+- **Stateless contract** — a codec library should be pure: input → output, no side effects, no I/O.
+- **Pluggability** — different runtimes need different negotiation strategies. A static profile YAML is right for a self-hosted demo; a live probe-on-drift is right for a multi-tenant SaaS. Pinning one choice into the codec foreclosed the others.
+- **NuGet hygiene** — every dependency the codec takes is a transitive burden on every consumer. The codec has *zero* runtime dependencies beyond the BCL.
+
+If you need negotiation or probing, build it on top. The codec gives you the parse/encode primitives and the `AgentClass` enum to key your policy on.
+
+## Phase 2+ candidates (intentionally deferred)
+
+These items appear in `hand-simplification-plan.md` and are valuable, but were judged too speculative to ship in v1:
+
+- Probabilistic parser (confidence-weighted field extraction)
+- Self-healing prompts (auto-adapt on degradation)
+- LanceDB checkpoints (emergent communication few-shot memory)
+- Developer CLI (`hand-tool parse / encode / convert`)
+- Extensible schema declaration (`I|sch=VCF|cfg=compact`)
+- Dual-mode `IAgentProtocol` abstraction (HAND/MCP/A2A unified)
+
+They live as ideas in the simplification plan, not as commitments.

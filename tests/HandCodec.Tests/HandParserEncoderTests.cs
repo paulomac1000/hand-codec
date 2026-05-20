@@ -221,6 +221,37 @@ public sealed class HandEncoderTests
     }
 
     [Fact]
+    public void Result_WithBody_PlacesBodyAfterNewline()
+    {
+        string wire = HandEncoder.Result("hello world", ("C", "0.95"));
+        wire.Should().Be("R|C=0.95\nhello world");
+    }
+
+    [Fact]
+    public void Result_WithBody_AndFields_PreservesHeaderFields()
+    {
+        string wire = HandEncoder.Result("the prose answer", ("C", "0.88"), ("S", "none"));
+        wire.Should().Be("R|C=0.88|S=none\nthe prose answer");
+    }
+
+    [Fact]
+    public void Result_WithoutBody_OmitsNewline()
+    {
+        string wire = HandEncoder.Result("", ("V", "short"), ("C", "0.9"));
+        wire.Should().Be("R|V=short|C=0.9");
+    }
+
+    [Fact]
+    public void Result_WithBody_ParsesBackAsBody()
+    {
+        string wire = HandEncoder.Result("prose after newline", ("C", "0.92"));
+        ParsedHandMessage? parsed = HandParser.ParseLenient(wire);
+        parsed.Should().NotBeNull();
+        parsed!.GetDouble("C").Should().BeApproximately(0.92, 0.001);
+        parsed.Body.Should().Be("prose after newline");
+    }
+
+    [Fact]
     public void Instruction_EncodesCorrectly()
     {
         HandEncoder.Instruction("light.switch", "turn_on").Should().Be("I|t=light.switch|a=turn_on");
@@ -508,9 +539,9 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Compact)
             .Layer(2)
-            .EmotionalState("High anxiety")
-            .Severity("moderate")
-            .Approach("CBT")
+            .Field("e", "High anxiety")
+            .Field("s", "moderate")
+            .Field("a", "CBT")
             .Build();
 
         encoded.Should().Be("M|L=2|e=High anxiety|s=moderate|a=CBT");
@@ -521,8 +552,8 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Balanced)
             .Layer(3)
-            .EmotionalState("Low")
-            .CrisisFlag("true")
+            .Field("em", "Low")
+            .Field("cf", "true")
             .Build();
 
         encoded.Should().Be("M|L=3|em=Low|cf=true");
@@ -533,8 +564,8 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Debug)
             .Layer(1)
-            .EmotionalState("anxious")
-            .Severity("high")
+            .Field("emotional_state", "anxious")
+            .Field("severity", "high")
             .Build();
 
         encoded.Should().Be("M|L=1|emotional_state=anxious|severity=high");
@@ -545,8 +576,8 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Balanced)
             .Layer(2)
-            .EmotionalState("overwhelmed")
-            .Severity("moderate")
+            .Field("em", "overwhelmed")
+            .Field("sv", "moderate")
             .Build();
 
         ParsedHandMessage? parsed = HandParser.Parse(encoded);

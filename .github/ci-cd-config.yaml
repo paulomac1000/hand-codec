@@ -1,0 +1,14 @@
+language: "dotnet"
+project: "hand-codec"
+package: "HandCodec"
+src_dir: "src/"
+dotnet_version: "8.0.x"
+dotnet_solution: "HandCodec.sln"
+use_docker: false
+is_mcp: false
+use_semgrep: true
+use_dependabot: true
+use_docs_validation: true
+package_ecosystems: ["github-actions", "nuget"]
+docs_paths: ["docs/", "examples/", "*.md"]
+version_source: "Directory.Build.props"

@@ -5,7 +5,7 @@ namespace HandCodec.Parser;
 
 /// <summary>
 /// Fluent builder for M| (Memo) performative payloads.
-/// Translates domain properties to tier-appropriate key aliases.
+/// 100% domain-agnostic, supporting standard and compression-tier key mappings.
 /// </summary>
 public sealed class MemoBuilder
 {
@@ -14,19 +14,17 @@ public sealed class MemoBuilder
 
     public MemoBuilder(CompressionTier tier) => _tier = tier;
 
+    /// <summary>Sets the layer index.</summary>
     public MemoBuilder Layer(int index) => Add("L", index.ToString(CultureInfo.InvariantCulture));
-    public MemoBuilder EmotionalState(string value) => Add(Key("e", "em", "emotional_state"), value);
-    public MemoBuilder Severity(string value) => Add(Key("s", "sv", "severity"), value);
-    public MemoBuilder Approach(string value) => Add(Key("a", "ap", "approach"), value);
-    public MemoBuilder KeyQuestion(string value) => Add(Key("k", "kq", "key_question"), value);
-    public MemoBuilder RiskIndicators(string value) => Add(Key("r", "ri", "risk_indicators"), value);
-    public MemoBuilder CognitivePatterns(string value) => Add(Key("c", "cp", "cognitive_patterns"), value);
-    public MemoBuilder EvidenceQuotes(string value) => Add(Key("q", "ev", "evidence_quotes"), value);
-    public MemoBuilder Technique(string value) => Add(Key("t", "tk", "technique"), value);
-    public MemoBuilder SessionGoal(string value) => Add(Key("g", "sg", "session_goal"), value);
-    public MemoBuilder RiskNote(string value) => Add(Key("n", "rn", "risk_note"), value);
-    public MemoBuilder CrisisFlag(string value) => Add(Key("!", "cf", "crisis_flag"), value);
 
+    /// <summary>Adds a key-value field that adapts to the configured compression tier.</summary>
+    public MemoBuilder Field(string compactKey, string balancedKey, string debugKey, string value) =>
+        Add(Key(compactKey, balancedKey, debugKey), value);
+
+    /// <summary>Adds a generic key-value field using the exact key specified.</summary>
+    public MemoBuilder Field(string key, string value) => Add(key, value);
+
+    /// <summary>Encodes the added fields into a H.A.N.D. Memo (M|) wire message.</summary>
     public string Build() => HandEncoder.Memo(_fields.ToArray());
 
     private MemoBuilder Add(string key, string value)

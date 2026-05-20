@@ -1,6 +1,46 @@
+# Build output
 bin/
 obj/
+[Dd]ebug/
+[Rr]elease/
+[Bb]uild/
+[Pp]ublish/
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage.opencover.xml
+
+# Packages
+*.nupkg
+*.snupkg
+.nuget/
+
+# IDE
 *.user
+*.userosscache
+*.sln.docstates
 .vs/
 .idea/
-*.nupkg
+.vscode/
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Logs
+*.log
+
+# Secrets
+.env
+*.local.json
+appsettings.Development.json
+
+# CI artifacts
+coverage-report/
+semgrep.sarif

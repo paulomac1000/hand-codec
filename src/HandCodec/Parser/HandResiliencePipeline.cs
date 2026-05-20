@@ -8,7 +8,8 @@ namespace HandCodec.Parser;
 /// <summary>Options controlling which stages of the degradation ladder are active.</summary>
 public sealed record HandResilientOptions(
     bool EnableMarkdownStrip = true,
-    bool EnableSemanticExtraction = false)
+    bool EnableSemanticExtraction = false,
+    Func<string, bool>? CrisisDetector = null)
 {
     /// <summary>Default: markdown strip ON, semantic extraction OFF.</summary>
     public static HandResilientOptions Default { get; } = new();
@@ -34,7 +35,7 @@ public interface IHandParsingStage
 /// </summary>
 public static partial class HandResiliencePipeline
 {
-    private static readonly IHandParsingStage[] Stages =
+    private static readonly IHandParsingStage[] _stages =
     [
         new StrictParseStage(),
         new LenientParseStage(),
@@ -57,18 +58,18 @@ public static partial class HandResiliencePipeline
         options ??= HandResilientOptions.Default;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        for (int i = 0; i < Stages.Length; i++)
+        for (int i = 0; i < _stages.Length; i++)
         {
-            if (!IsStageEnabled(Stages[i].Name, options))
+            if (!IsStageEnabled(_stages[i].Name, options))
                 continue;
 
-            ParsedHandMessage? result = Stages[i].Execute(rawOutput, options);
+            ParsedHandMessage? result = _stages[i].Execute(rawOutput, options);
             if (result is not null)
                 return new ResilienceResult(i + 1, result, sw.ElapsedMilliseconds);
         }
 
         return new ResilienceResult(
-            Stages.Length + 1,
+            _stages.Length + 1,
             ParsedHandMessage.Unstructured(rawOutput),
             sw.ElapsedMilliseconds);
     }
@@ -108,7 +109,7 @@ public static partial class HandResiliencePipeline
     private sealed class SemanticExtractionStage : IHandParsingStage
     {
         public string Name => "semantic";
-        public ParsedHandMessage? Execute(string raw, HandResilientOptions opts) => TryExtractSemantics(raw);
+        public ParsedHandMessage? Execute(string raw, HandResilientOptions opts) => TryExtractSemantics(raw, opts.CrisisDetector);
     }
 
     internal static string StripMarkdownFences(string raw)
@@ -136,7 +137,7 @@ public static partial class HandResiliencePipeline
         return sb.ToString().TrimEnd();
     }
 
-    internal static ParsedHandMessage? TryExtractSemantics(string raw)
+    internal static ParsedHandMessage? TryExtractSemantics(string raw, Func<string, bool>? crisisDetector)
     {
         var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -149,33 +150,46 @@ public static partial class HandResiliencePipeline
         if (valueMatch.Success)
             payload["V"] = valueMatch.Groups[1].Value.Trim();
 
-        if (payload.Count == 0)
-            return null;
+        if (payload.Count > 0)
+        {
+            if (crisisDetector?.Invoke(raw) == true)
+                payload["S"] = "crisis";
 
-        if (CrisisKeywordDetector.DetectCrisisKeywords(raw))
-            payload["S"] = "crisis";
+            return new ParsedHandMessage(Performative.Result, raw, payload, raw);
+        }
 
-        return new ParsedHandMessage(Performative.Result, raw, payload, raw);
+        var memoPayload = TryExtractMemoFields(raw);
+        if (memoPayload is not null && memoPayload.Count > 0)
+        {
+            memoPayload["L"] = "2";
+            return new ParsedHandMessage(Performative.Memo, raw, memoPayload, raw);
+        }
+
+        return null;
     }
-}
 
-/// <summary>Lightweight Polish crisis keyword detector for the semantic safety net (Level 4).</summary>
-public static class CrisisKeywordDetector
-{
-    private static readonly (string pattern, int weight)[] CrisisPatterns =
+    private static readonly (string Pattern, string Key)[] _memoFieldMap =
     [
-        ("samobój", 5),
-        ("zabiję się", 5),
-        ("nie chcę żyć", 5),
-        ("okalecz", 3),
-        ("skrzywdzę", 3),
-        ("beznadziejne", 1),
-        ("nie ma sensu", 2),
-        ("koniec ze mną", 4),
+        (@"emotional\s*state|emotion", "em"),
+        (@"severity|intensity", "sv"),
+        (@"risk\s*indicators?|risks?", "ri"),
+        (@"cognitive\s*patterns?", "cp"),
+        (@"approach|method", "ap"),
+        (@"technique|intervention", "tk"),
+        (@"key\s*question|question", "kq"),
+        (@"risk\s*note|safety\s*note", "rn"),
     ];
 
-    public static bool DetectCrisisKeywords(string text, int threshold = 7) =>
-        CrisisPatterns
-            .Where(p => text.Contains(p.pattern, StringComparison.OrdinalIgnoreCase))
-            .Sum(p => p.weight) >= threshold;
+    internal static Dictionary<string, string>? TryExtractMemoFields(string raw)
+    {
+        var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string pattern, string key) in _memoFieldMap)
+        {
+            var regex = new Regex($@"(?:{pattern})\s*[:=-]\s*(.+?)(?:\n|$)", RegexOptions.IgnoreCase);
+            Match m = regex.Match(raw);
+            if (m.Success)
+                payload[key] = m.Groups[1].Value.Trim();
+        }
+        return payload.Count > 0 ? payload : null;
+    }
 }

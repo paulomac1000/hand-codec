@@ -67,16 +67,19 @@ public static partial class HandParser
 
     /// <summary>
     /// Lenient parse: scans all lines, strips blockquotes.
-    /// Returns the first matching line or null.
+    /// Returns the first matching line (with <see cref="ParsedHandMessage.Body"/> populated
+    /// from the lines that follow it) or null. <see cref="ParsedHandMessage.RawMessage"/>
+    /// is always the full input passed to this call.
     /// </summary>
     public static ParsedHandMessage? ParseLenient(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
             return null;
 
-        foreach (string line in message.Split('\n'))
+        string[] lines = message.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
         {
-            string stripped = line.TrimStart('>', ' ', '\t');
+            string stripped = lines[i].TrimStart('>', ' ', '\t');
             Match match = MessagePatternLenient().Match(stripped);
             if (!match.Success)
                 continue;
@@ -98,7 +101,10 @@ public static partial class HandParser
                 continue;
 
             string rawPayload = match.Groups["payload"].Value;
-            return new ParsedHandMessage(performative, rawPayload, ParsePayload(rawPayload), line);
+            return new ParsedHandMessage(performative, rawPayload, ParsePayload(rawPayload), message)
+            {
+                Body = ExtractBody(lines, i + 1),
+            };
         }
 
         return null;
@@ -175,6 +181,27 @@ public static partial class HandParser
     [GeneratedRegex(@"^[RIPCBEAM]\s*\|", RegexOptions.Compiled)]
     private static partial Regex PerformativeStartPattern();
 #pragma warning restore MA0009
+
+    /// <summary>
+    /// Joins the lines after the wire line into the narrative body, excluding markdown fences.
+    /// </summary>
+    private static string ExtractBody(string[] lines, int startIndex)
+    {
+        if (startIndex >= lines.Length)
+            return string.Empty;
+
+        var collected = new List<string>(lines.Length - startIndex);
+        for (int i = startIndex; i < lines.Length; i++)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal)
+                || trimmed.StartsWith("~~~", StringComparison.Ordinal))
+                continue;
+            collected.Add(lines[i]);
+        }
+
+        return string.Join('\n', collected).Trim();
+    }
 
     private static Dictionary<string, string> ParsePayload(string payload)
     {

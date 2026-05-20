@@ -105,6 +105,59 @@ public sealed class HandResiliencePipelineTests
         double avgMs = totalMs / 100.0;
         avgMs.Should().BeLessThan(5.0, "full-ladder worst-case parse should average under 5ms over 100 calls");
     }
+
+    [Fact]
+    public void Parse_SemanticExtraction_RecoversMemoFromElaborateText()
+    {
+        const string raw = "Emotional state: anxiety\nSeverity: moderate\nRisk indicators: insomnia";
+        var opts = HandResilientOptions.AllEnabled;
+        var r = HandResiliencePipeline.Parse(raw, opts);
+
+        r.Level.Should().Be(4);
+        r.Message.Performative.Should().Be(Performative.Memo);
+        r.Message.Get("em").Should().Be("anxiety");
+        r.Message.Get("sv").Should().Be("moderate");
+        r.Message.Get("ri").Should().Be("insomnia");
+    }
+
+    [Fact]
+    public void Parse_SemanticExtraction_RecoversMemoWithAllFields()
+    {
+        const string raw = "Emotional state: exhaustion with anxiety\n"
+            + "Severity: moderate\n"
+            + "Risk indicators: insomnia, worry\n"
+            + "Cognitive patterns: catastrophizing\n"
+            + "Approach: reflective listening\n"
+            + "Technique: open question\n"
+            + "Key question: What keeps you up at night?\n"
+            + "Risk note: none";
+        var opts = HandResilientOptions.AllEnabled;
+        var r = HandResiliencePipeline.Parse(raw, opts);
+
+        r.Level.Should().Be(4);
+        r.Message.Performative.Should().Be(Performative.Memo);
+        r.Message.Get("em").Should().Be("exhaustion with anxiety");
+        r.Message.Get("sv").Should().Be("moderate");
+        r.Message.Get("ri").Should().Be("insomnia, worry");
+        r.Message.Get("cp").Should().Be("catastrophizing");
+        r.Message.Get("ap").Should().Be("reflective listening");
+        r.Message.Get("tk").Should().Be("open question");
+        r.Message.Get("kq").Should().Be("What keeps you up at night?");
+        r.Message.Get("rn").Should().Be("none");
+    }
+
+    [Fact]
+    public void Parse_SemanticExtraction_PrefersResultWhenConfidencePresent()
+    {
+        const string raw = "confidence: 0.95\nanswer: anxiety detected\nemotional state: anxiety";
+        var opts = HandResilientOptions.AllEnabled;
+        var r = HandResiliencePipeline.Parse(raw, opts);
+
+        r.Level.Should().Be(4);
+        r.Message.Performative.Should().Be(Performative.Result,
+            "when confidence+answer keywords are found, Result takes priority over Memo");
+        r.Message.GetDouble("C").Should().BeApproximately(0.95, 0.001);
+    }
 }
 
 public sealed class AgentClassTests
@@ -116,10 +169,11 @@ public sealed class AgentClassTests
         values.Should().HaveCount(4);
     }
 
+    private static readonly string[] ExpectedClasses = ["Native", "Assisted", "Reasoning", "External"];
+
     [Fact]
     public void AgentClass_ContainsExpectedValues()
     {
-        Enum.GetNames<AgentClass>().Should().BeEquivalentTo(
-            new[] { "Native", "Assisted", "Reasoning", "External" });
+        Enum.GetNames<AgentClass>().Should().BeEquivalentTo(ExpectedClasses);
     }
 }

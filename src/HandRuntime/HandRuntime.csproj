@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>HandRuntime</PackageId>
+    <Description>Runtime orchestration layer for H.A.N.D. Codec — Implicit Priming, Checkpoint Negotiation, ConversationBuilder, ResponseDecoder. Domain-agnostic.</Description>
+    <PackageTags>llm;multi-agent;orchestration;runtime;hand;codec</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../HandCodec/HandCodec.csproj" />
+  </ItemGroup>
+
+</Project>

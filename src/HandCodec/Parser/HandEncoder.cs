@@ -14,6 +14,19 @@ public static class HandEncoder
     public static string Result(params (string Key, string Value)[] payload) =>
         Encode(Performative.Result, payload);
 
+    /// <summary>
+    /// Encodes a Result message with narrative body on line 2+.
+    /// Rule: long natural-language prose goes in <paramref name="body"/> (after \n),
+    /// short technical values go as key=value fields in the header line.
+    /// Example: Result("hello world", ("C", "0.95")) → "R|C=0.95\nhello world"
+    /// Example: Result("", ("V", "short"), ("C", "0.9")) → "R|V=short|C=0.9"
+    /// </summary>
+    public static string Result(string body, params (string Key, string Value)[] fields)
+    {
+        string header = Encode(Performative.Result, fields);
+        return string.IsNullOrWhiteSpace(body) ? header : header + "\n" + body;
+    }
+
     /// <summary>Encodes an Instruction message. Example: I|t=light.switch|a=turn_on.</summary>
     public static string Instruction(string type, string action, params (string Key, string Value)[] additional)
     {
