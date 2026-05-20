@@ -2,13 +2,14 @@ name: .NET CI — Quality Gate
 
 on:
   push:
+    tags:
+      - "v*"
+  push:
     branches: [main]
     paths:
       - "src/**"
       - "tests/**"
       - "Directory.Build.props"
-    tags:
-      - "v*"
   pull_request:
     branches: [main]
     paths:
