@@ -1,5 +1,5 @@
 ---
-description: HandCodec usage examples — encode/decode, resilience pipeline, MemoBuilder, prefill prompting pattern
+description: HandCodec usage examples — encode/decode, resilience pipeline, MemoBuilder, prefill pattern, end-to-end multi-agent pipeline
 doc_id: workflow.hand-codec-examples
 type: workflow
 status: active
@@ -68,10 +68,10 @@ fenced.Level;       // 3
 
 // Pure prose — semantic extraction (level 4)
 var prose = HandResiliencePipeline.Parse(
-    "My confidence is 0.87 and the answer is 42",
+    "confidence: 0.87, value: task completed successfully",
     HandResilientOptions.AllEnabled);
 prose.Level;        // 4
-prose.Message.Get("V");  // "42"
+prose.Message.Get("V");  // "task completed successfully"
 
 // Total failure — passthrough (level 5, IsUnstructured=true)
 var garbage = HandResiliencePipeline.Parse("the cat sat on the mat");
@@ -80,28 +80,48 @@ garbage.Message.IsUnstructured;       // true
 garbage.Message.RawMessage;           // "the cat sat on the mat"
 ```
 
-## 5. Memo for inter-layer context
+### Per-level access
+
+```csharp
+// Each level is exposed as a standalone method returning ParsedHandMessage (never null)
+var strict = HandResiliencePipeline.ParseStrict("R|V=56|C=0.9");
+strict.IsUnstructured;  // false
+
+var lenient = HandResiliencePipeline.ParseLenient("preamble\nR|V=42");
+lenient.Get("V");       // "42"
+
+var stripped = HandResiliencePipeline.ParseWithMarkdownStrip("```\nR|V=hello\n```");
+stripped.Get("V");      // "hello"
+
+var semantic = HandResiliencePipeline.ParseSemantic("Task: classify, Priority: high");
+semantic.Get("task");   // "classify"
+
+// On failure, each returns IsUnstructured=true — never null
+var failed = HandResiliencePipeline.ParseStrict("plain junk");
+failed.IsUnstructured;  // true
+```
+
+## 5. Memo for inter-agent context
 
 ```csharp
 // Balanced tier — short aliases (default for Assisted-class models)
 string memo = new MemoBuilder(CompressionTier.Balanced)
     .Layer(2)
-    .Field("em", "anxiety")
-    .Field("sv", "moderate")
-    .Field("ap", "CBT")
-    .Field("kq", "What triggers this in the morning?")
+    .Field("task", "classify")
+    .Field("prio", "high")
+    .Field("tags", "urgent,verified")
     .Build();
-// → "M|L=2|em=anxiety|sv=moderate|ap=CBT|kq=What triggers this in the morning?"
+// → "M|L=2|task=classify|prio=high|tags=urgent,verified"
 
 // Compact tier — single-letter keys for Native-class
 string compact = new MemoBuilder(CompressionTier.Compact)
-    .Layer(2).Field("e", "anxiety").Field("s", "moderate").Build();
-// → "M|L=2|e=anxiety|s=moderate"
+    .Layer(2).Field("tx", "extract").Field("pr", "low").Build();
+// → "M|L=2|tx=extract|pr=low"
 ```
 
-**Important:** `MemoBuilder` in HandCodec is 100% domain-agnostic (`Field(key, value)` only). Domain-specific semantic methods (`.EmotionalState()`, `.Severity()`, and others) can be added as C# extension methods in your consuming application — see the Hybrid Therapist project for reference.
+**Important:** `MemoBuilder` in HandCodec is 100% domain-agnostic (`Field(key, value)` only). Domain-specific semantic methods can be added as C# extension methods in your consuming application.
 
-**Current architecture (May 2026):** Raw `M|` wire enters downstream prompts directly. The old `MemoToPlainText()` conversion has been removed — models learn the wire format through Implicit Priming, not expansion.
+**Current architecture (May 2026):** Raw `M|` wire enters downstream prompts directly. Models learn the wire format through Implicit Priming, not expansion.
 
 ## 6. Batch — multiple tasks in one wire message
 
@@ -120,26 +140,25 @@ The pipe in the second document is safe because documents are Base64-encoded.
 
 ## 7. Prefill prompting pattern (Assisted-class models)
 
-This is the pattern used by HybridTherapist for small models that need a structural hint:
+This is the pattern for small models that need a structural hint:
 
 ```csharp
 string systemPrompt = $$"""
-    You are an empathetic therapist. Respond with warmth and clinical insight.
+    You are a classification agent. Respond with structured analysis.
 
     Start your response with: R|value=your_answer|confidence=confidence_decimal
-    Example: R|value=I understand how you feel|confidence=0.92
+    Example: R|value=The document is a technical report|confidence=0.92
     Then continue in the next lines if needed.
     """;
 
-string userPrompt = "Nie mogę zasnąć od trzech tygodni.";
+string userPrompt = "Classify this document: ...";
 
 // Then in the chat API call, prefill the assistant turn:
 var request = new {
     messages = new[] {
         new { role = "system", content = systemPrompt },
         new { role = "user", content = userPrompt },
-        new { role = "assistant", content = TherapistHandEncoder.AssistantPrefill }
-        //                                  ↑ "R|"
+        new { role = "assistant", content = "R|" }  // prefill hint
     }
 };
 ```
@@ -150,18 +169,18 @@ The model continues from `R|`, so its first emitted tokens are the structured pa
 
 ```csharp
 string rawModelOutput = """
-    R|V=I hear how exhausting that's been|C=0.91|A=0
-    Insomnia like this — for weeks — wears down both body and mind. What's
-    one thing that used to help you wind down before this started?
+    R|V=The document is a technical report|C=0.91|A=0
+    It covers three main topics: system architecture, deployment strategy,
+    and monitoring infrastructure. The architecture section is the most detailed.
     """;
 
 var result = HandResiliencePipeline.Parse(rawModelOutput);
 result.Level;                                     // 2 (lenient — strict is single-line only)
-string content = result.Message.Get("V");         // "I hear how exhausting that's been"
+string content = result.Message.Get("V");         // "The document is a technical report"
 double confidence = result.Message.GetDoubleOr("C", 0.0);  // 0.91
 
 // The narrative (line 2+) is recovered on Body; RawMessage is the full raw input.
-string narrative = result.Message.Body;            // "Insomnia like this — ... started?"
+string narrative = result.Message.Body;            // "It covers three main topics: ..."
 string fullText = result.Message.RawMessage;       // the entire raw model output
 ```
 
@@ -189,4 +208,59 @@ CompressionTier tier = cls switch
 };
 ```
 
-This is the policy layer that lives **outside** HandCodec — the codec gives you the enum, you choose what to do with it.
+
+
+## 10. End-to-end multi-agent pipeline
+
+This example connects all building blocks: encode → resilience parse → memo → batch.
+
+```csharp
+// ── Step 1: Agent A (Classification) encodes a Result ──
+string wire = HandEncoder.Result("high_priority", ("C", "0.94"), ("S", "verified"));
+// → "R|V=high_priority|C=0.94|S=verified"
+
+// ── Step 2: Orchestrator receives raw model output (possibly noisy) ──
+string rawOutput = """
+    ```hand
+    R|V=high_priority|C=0.94|S=verified
+    ```
+    """;
+
+var parsed = HandResiliencePipeline.Parse(rawOutput);
+
+// Inspect degradation level — early warning signal
+if (parsed.Level >= 4)
+    Console.WriteLine($"Warning: model at resilience Level {parsed.Level}");
+
+double confidence = parsed.Message.GetDoubleOr("C", 0.0);
+string value = parsed.Message.Get("V")!;
+
+// ── Step 3: Build downstream Memo for Agent B (Extraction) ──
+string memo = new MemoBuilder(CompressionTier.Balanced)
+    .Layer(2)
+    .Field("task", "extract")
+    .Field("prio", "high")
+    .Field("src", $"L1:{value}")
+    .Build();
+// → "M|L=2|task=extract|prio=high|src=L1:high_priority"
+
+// ── Step 4: Agent B receives a batch of Memos ──
+string batch = memo + "\n" + HandEncoder.Memo(
+    ("L", "2"), ("task", "summarize"), ("prio", "low"));
+var memos = HandParser.ParseBatch(batch);
+// memos[0].Get("task") → "extract"
+// memos[1].Get("task") → "summarize"
+
+// ── Step 5: Resilience on every received message ──
+foreach (var m in memos)
+{
+    var resilient = HandResiliencePipeline.Parse(m.RawMessage);
+    Console.WriteLine(
+        $"{resilient.Message.Get("task")} — confidence {resilient.Message.GetDoubleOr("C", -1)} — Level {resilient.Level}");
+}
+```
+
+This is the policy layer that lives **outside** HandCodec — the codec gives you the enum,
+you choose what to do with it. The full orchestrator loop is documented in
+[Building a Pipeline with HandCodec](../docs/pipeline-guide.md).
+

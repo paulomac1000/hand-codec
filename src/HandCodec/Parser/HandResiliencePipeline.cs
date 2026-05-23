@@ -49,6 +49,12 @@ public static partial class HandResiliencePipeline
     [GeneratedRegex(@"(?:answer|value|result|translation)\s*[:=]\s*(.+?)(?:\n|$)", RegexOptions.IgnoreCase)]
     private static partial Regex ValueRegex();
 
+    // Generic key:value pattern for any domain — extracts "Word Phrase: value" or "word=value" from prose.
+    [GeneratedRegex(@"^(\w[\w\s]*?)\s*[:=]\s*(.+?)$", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex GenericKeyValueRegex();
+
+    // ─── Full-ladder convenience ────────────────────────────────────────────
+
     /// <summary>
     /// Runs the degradation ladder and returns the first successful parse level.
     /// Never returns null — falls through to Level 5 (unstructured passthrough).
@@ -73,6 +79,61 @@ public static partial class HandResiliencePipeline
             ParsedHandMessage.Unstructured(rawOutput),
             sw.ElapsedMilliseconds);
     }
+
+    // ─── Per-level public methods ───────────────────────────────────────────
+
+    /// <summary>
+    /// Strict parse only (Level 1). First-line regex match against ^[RIPCBEAM]\|.
+    /// Returns <see cref="ParsedHandMessage.Unstructured"/> on failure. Never returns null.
+    /// </summary>
+    public static ParsedHandMessage ParseStrict(string rawOutput)
+    {
+        var result = HandParser.Parse(rawOutput);
+        return result ?? ParsedHandMessage.Unstructured(rawOutput);
+    }
+
+    /// <summary>
+    /// Lenient parse only (Level 2). Scans all lines for first performative match,
+    /// tolerating preamble and blockquotes.
+    /// Returns <see cref="ParsedHandMessage.Unstructured"/> on failure. Never returns null.
+    /// </summary>
+    public static ParsedHandMessage ParseLenient(string rawOutput)
+    {
+        var result = HandParser.ParseLenient(rawOutput);
+        return result ?? ParsedHandMessage.Unstructured(rawOutput);
+    }
+
+    /// <summary>
+    /// Markdown-strip then lenient parse (Level 3). Strips ```fences``` and &gt; blockquotes
+    /// before attempting lenient parse.
+    /// Returns <see cref="ParsedHandMessage.Unstructured"/> on failure. Never returns null.
+    /// </summary>
+    public static ParsedHandMessage ParseWithMarkdownStrip(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return ParsedHandMessage.Unstructured(rawOutput ?? string.Empty);
+
+        string stripped = StripMarkdownFences(rawOutput);
+        if (stripped != rawOutput)
+        {
+            var result = HandParser.ParseLenient(stripped);
+            if (result is not null)
+                return result;
+        }
+        return ParsedHandMessage.Unstructured(rawOutput);
+    }
+
+    /// <summary>
+    /// Semantic extraction from free-form text (Level 4). Extracts any key:value / key=value
+    /// pairs from prose using a fully generic, domain-agnostic regex. No hardcoded field maps.
+    /// Returns <see cref="ParsedHandMessage.Unstructured"/> on failure. Never returns null.
+    /// </summary>
+    public static ParsedHandMessage ParseSemantic(string rawOutput)
+    {
+        return TryExtractSemantics(rawOutput, null) ?? ParsedHandMessage.Unstructured(rawOutput);
+    }
+
+    // ─── Internal helpers ───────────────────────────────────────────────────
 
     private static bool IsStageEnabled(string name, HandResilientOptions opts) => name switch
     {
@@ -158,7 +219,8 @@ public static partial class HandResiliencePipeline
             return new ParsedHandMessage(Performative.Result, raw, payload, raw);
         }
 
-        var memoPayload = TryExtractMemoFields(raw);
+        // Generic memo-field extraction — any "key: value" or "key=value" on its own line.
+        var memoPayload = TryExtractGenericKeyValues(raw);
         if (memoPayload is not null && memoPayload.Count > 0)
         {
             memoPayload["L"] = "2";
@@ -168,28 +230,46 @@ public static partial class HandResiliencePipeline
         return null;
     }
 
-    private static readonly (string Pattern, string Key)[] _memoFieldMap =
-    [
-        (@"emotional\s*state|emotion", "em"),
-        (@"severity|intensity", "sv"),
-        (@"risk\s*indicators?|risks?", "ri"),
-        (@"cognitive\s*patterns?", "cp"),
-        (@"approach|method", "ap"),
-        (@"technique|intervention", "tk"),
-        (@"key\s*question|question", "kq"),
-        (@"risk\s*note|safety\s*note", "rn"),
-    ];
-
-    internal static Dictionary<string, string>? TryExtractMemoFields(string raw)
+    /// <summary>
+    /// Fully domain-agnostic key-value extraction from prose.
+    /// Matches any "Key Phrase: value" or "key=value" pattern on each line,
+    /// normalises keys by lowercasing and replacing spaces with underscores.
+    /// No hardcoded field maps — works for any domain.
+    /// </summary>
+    internal static Dictionary<string, string>? TryExtractGenericKeyValues(string raw)
     {
         var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach ((string pattern, string key) in _memoFieldMap)
+
+        foreach (string line in raw.Split('\n'))
         {
-            var regex = new Regex($@"(?:{pattern})\s*[:=-]\s*(.+?)(?:\n|$)", RegexOptions.IgnoreCase);
-            Match m = regex.Match(raw);
-            if (m.Success)
-                payload[key] = m.Groups[1].Value.Trim();
+            string trimmed = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+                continue;
+
+            Match m = GenericKeyValueRegex().Match(trimmed);
+            if (!m.Success)
+                continue;
+
+            string key = NormaliseKey(m.Groups[1].Value);
+            string value = m.Groups[2].Value.Trim();
+
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
+                continue;
+
+            if (!payload.ContainsKey(key))
+                payload[key] = value;
         }
+
         return payload.Count > 0 ? payload : null;
+    }
+
+    private static string NormaliseKey(string rawKey)
+    {
+        // Lowercase and replace whitespace with underscore: "Task Type" → "task_type"
+#pragma warning disable CA1308 // Normalize to lowercase for dictionary keys, not for comparison
+        return Regex.Unescape(
+            System.Text.RegularExpressions.Regex.Replace(
+                rawKey.Trim().ToLowerInvariant(), @"\s+", "_"));
+#pragma warning restore CA1308
     }
 }

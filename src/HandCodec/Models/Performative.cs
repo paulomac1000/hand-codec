@@ -27,6 +27,6 @@ public enum Performative
     /// <summary>Answer: A|content=42.</summary>
     Answer = 6,
 
-    /// <summary>Memo: M|L=2|em=High anxiety|sv=moderate — structured context memo between layers.</summary>
+    /// <summary>Memo: M|L=2|tx=classify|pr=high — structured context memo between agents or pipeline layers.</summary>
     Memo = 7,
 }

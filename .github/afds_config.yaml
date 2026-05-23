@@ -82,6 +82,7 @@ exempt_files:
   - docs/design-rationale.md
   - examples/README.md
   - README.md
+  - CHANGELOG.md
 
 normative_sections:
   - RULES

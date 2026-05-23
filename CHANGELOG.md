@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-23
+
+### Changed
+- **Domain-agnostic codec**: Removed all therapy-specific terminology and hardcoded field mappings. Semantic extraction (`Level 4`) now uses fully generic `key:value` pattern matching that works for any domain.
+- **Per-level resilience methods**: Exposed `ParseStrict()`, `ParseLenient()`, `ParseWithMarkdownStrip()`, `ParseSemantic()` as public methods on `HandResiliencePipeline`. All return `ParsedHandMessage` (never null).
+- **Generic compression tier aliases**: Replaced domain-specific example keys with generic multi-agent pipeline concepts (`task_type`/`task`/`tx`, `priority`/`prio`/`pr`, `status`/`stat`/`st`, `tags`/`tags`/`tg`).
+
+### Added
+- `TryExtractGenericKeyValues()` — fully domain-agnostic key:value extraction from free-text prose. Normalises keys by lowercasing and replacing spaces with underscores.
+- `InternalsVisibleTo` for test project (`HandCodec.Tests`).
+
+### Fixed
+- Documentation and examples decoupled from therapy domain. Therapy mentioned only as external reference (Hybrid Therapist link in README).
+
 ## [0.1.0] - 2026-05-20
 
 ### HandCodec (`src/HandCodec/`)

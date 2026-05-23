@@ -106,7 +106,7 @@ public static class HandEncoder
     }
 
     /// <summary>
-    /// Encodes a Memo context message. Example: M|L=2|em=High anxiety|sv=moderate.
+    /// Encodes a Memo context message. Example: M|L=2|tx=classify|pr=high.
     /// Use <see cref="MemoBuilder"/> for fluent tier-aware construction.
     /// </summary>
     public static string Memo(params (string Key, string Value)[] fields) =>
