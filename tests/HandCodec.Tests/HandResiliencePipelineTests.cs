@@ -293,6 +293,52 @@ public sealed class HandResiliencePipelineTests
         result.ShouldNotBeNull();
         result!["status"].ShouldBe("first");
     }
+
+    [Fact]
+    public void StripMarkdownFences_TildeFences_ReturnsOriginal()
+    {
+        // StripMarkdownFences only strips backtick fences (```) at the top level.
+        // Tilde fences (~~~) inside the string are stripped during line iteration
+        // but not at the initial guard check. This is the actual behavior.
+        string raw = "~~~\nR|V=56\n~~~";
+        string result = HandResiliencePipeline.StripMarkdownFences(raw);
+        result.ShouldBe(raw);
+    }
+
+    [Fact]
+    public void StripMarkdownFences_NoOpeningFence_ReturnsOriginal()
+    {
+        string raw = "R|V=56|C=0.9";
+        string result = HandResiliencePipeline.StripMarkdownFences(raw);
+        result.ShouldBe(raw);
+    }
+
+    [Fact]
+    public void ParseWithMarkdownStrip_NoFenceContent_ReturnsUnstructured()
+    {
+        var msg = HandResiliencePipeline.ParseWithMarkdownStrip("plain text R|V=56");
+        msg.IsUnstructured.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ParseWithMarkdownStrip_BlockquoteInsideFences_Recovers()
+    {
+        string raw = "```\n> R|V=56|C=0.9\n```";
+        var msg = HandResiliencePipeline.ParseWithMarkdownStrip(raw);
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("V").ShouldBe("56");
+    }
+
+    [Fact]
+    public void TryExtractGenericKeyValues_MixedSeparators_ExtractsAll()
+    {
+        var result = HandResiliencePipeline.TryExtractGenericKeyValues(
+            "field1: value1\nfield2=value2\nfield3: value3");
+        result.ShouldNotBeNull();
+        result!.Count.ShouldBe(3);
+        result["field1"].ShouldBe("value1");
+        result["field2"].ShouldBe("value2");
+    }
 }
 
 public sealed class AgentClassTests
@@ -310,5 +356,19 @@ public sealed class AgentClassTests
     public void AgentClass_ContainsExpectedValues()
     {
         Enum.GetNames<AgentClass>().ShouldBe(ExpectedClasses);
+    }
+
+    [Fact]
+    public void Prefill_InvalidEnum_UsesDefaultPrefill()
+    {
+        var invalid = (AgentClass)99;
+        HandAgentProfile.Prefill(invalid).ShouldBe("R|");
+    }
+
+    [Fact]
+    public void TierFor_InvalidEnum_UsesDefaultTier()
+    {
+        var invalid = (AgentClass)99;
+        HandAgentProfile.TierFor(invalid).ShouldBe(CompressionTier.Balanced);
     }
 }

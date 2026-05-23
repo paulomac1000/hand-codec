@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using HandCodec.Exceptions;
 using System.Text;
+using System.Threading.Tasks;
 using HandCodec.Models;
 using HandCodec.Parser;
 using Shouldly;
@@ -140,6 +142,57 @@ public sealed class HandParserTests
     public void ParseBatch_EmptyInput_ReturnsEmpty()
     {
         HandParser.ParseBatch("").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ParseLenient_InvalidPerformativeLetter_SkipsAndFindsNext()
+    {
+        var result = HandParser.ParseLenient("Z|key=val\nR|V=hello");
+        result.ShouldNotBeNull();
+        result!.Get("V").ShouldBe("hello");
+    }
+
+    [Fact]
+    public async Task ParseBatchStreamAsync_YieldsParsedMessages()
+    {
+        var lines = new[] { "R|V=first", "garbage", "R|V=second" };
+        var asyncLines = ToAsyncEnumerable(lines);
+        var results = new List<ParsedHandMessage?>();
+#pragma warning disable CA2007
+        await foreach (var msg in HandParser.ParseBatchStreamAsync(asyncLines))
+#pragma warning restore CA2007
+            results.Add(msg);
+        results.Count.ShouldBe(2);
+        results[0].ShouldNotBeNull();
+        results[1].ShouldNotBeNull();
+    }
+
+#pragma warning disable CA2007
+    private static async IAsyncEnumerable<string> ToAsyncEnumerable(string[] lines)
+    {
+        foreach (var line in lines)
+        {
+            yield return line;
+            await Task.CompletedTask;
+        }
+    }
+#pragma warning restore CA2007
+
+    [Fact]
+    public void ParseBatch_PartialSuccess_ThrowsHandBatchPartialException()
+    {
+        string raw = "R|V=ok\nR|\n";  // second segment "R|" has no payload, fails to parse
+        var ex = Should.Throw<HandBatchPartialException>(() => HandParser.ParseBatch(raw));
+        ex.SuccessfulSegments.Count.ShouldBe(1);
+        ex.SuccessfulSegments[0].Get("V").ShouldBe("ok");
+        ex.FailedSegmentCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public void ParseBatch_AllSegmentsFail_ReturnsEmpty()
+    {
+        var results = HandParser.ParseBatch("garbage1\ngarbage2\n");
+        results.ShouldBeEmpty();
     }
 }
 
@@ -587,5 +640,70 @@ public sealed class MemoBuilderTests
         parsed.GetInt("L").ShouldBe(2);
         parsed.Get("task").ShouldBe("classify");
         parsed.Get("prio").ShouldBe("high");
+    }
+
+    [Fact]
+    public void MemoBuilder_ThreeKeyField_Compact_UsesCompactKey()
+    {
+        var encoded = new MemoBuilder(CompressionTier.Compact)
+            .Field(compactKey: "tx", balancedKey: "task", debugKey: "task_type", value: "classify")
+            .Build();
+        encoded.ShouldBe("M|tx=classify");
+    }
+
+    [Fact]
+    public void MemoBuilder_ThreeKeyField_Balanced_UsesBalancedKey()
+    {
+        var encoded = new MemoBuilder(CompressionTier.Balanced)
+            .Field(compactKey: "tx", balancedKey: "task", debugKey: "task_type", value: "classify")
+            .Build();
+        encoded.ShouldBe("M|task=classify");
+    }
+
+    [Fact]
+    public void MemoBuilder_ThreeKeyField_Debug_UsesDebugKey()
+    {
+        var encoded = new MemoBuilder(CompressionTier.Debug)
+            .Field(compactKey: "tx", balancedKey: "task", debugKey: "task_type", value: "classify")
+            .Build();
+        encoded.ShouldBe("M|task_type=classify");
+    }
+}
+
+public sealed class HandBatchPartialExceptionTests
+{
+    [Fact]
+    public void Constructor_WithSegments_SetsProperties()
+    {
+        var parsed = HandParser.Parse("R|V=ok")!;
+        var ex = new HandBatchPartialException([parsed], 3);
+        ex.SuccessfulSegments.Count.ShouldBe(1);
+        ex.SuccessfulSegments[0].Get("V").ShouldBe("ok");
+        ex.FailedSegmentCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public void Constructor_NoArgs_SetsEmptyDefaults()
+    {
+        var ex = new HandBatchPartialException();
+        ex.SuccessfulSegments.ShouldBeEmpty();
+        ex.FailedSegmentCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Constructor_WithMessage_SetsMessage()
+    {
+        var ex = new HandBatchPartialException("test message");
+        ex.Message.ShouldContain("test message");
+        ex.SuccessfulSegments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Constructor_WithMessageAndInner_SetsProperties()
+    {
+        var inner = new InvalidOperationException("inner");
+        var ex = new HandBatchPartialException("test message", inner);
+        ex.Message.ShouldContain("test message");
+        ex.InnerException.ShouldBe(inner);
     }
 }
