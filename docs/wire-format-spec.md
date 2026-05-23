@@ -125,7 +125,15 @@ public record ParsedHandMessage(
     IReadOnlyDictionary<string, string> Payload,  // { V: "56", C: "0.94", A: "0" }
     string RawMessage)              // full original line
 {
+    /// <summary>True when no parse level could recover structure from the raw output.</summary>
     bool IsUnstructured { get; init; }
+
+    /// <summary>
+    /// Narrative text that followed the wire line (line 2+), per the data/narrative split.
+    /// Empty when single-line, unstructured, or body could not be determined.
+    /// Markdown fence lines are excluded.
+    /// </summary>
+    string Body { get; init; }
 }
 ```
 

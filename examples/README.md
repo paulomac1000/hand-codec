@@ -1,5 +1,5 @@
 ---
-description: HandCodec usage examples — encode/decode, resilience pipeline, MemoBuilder, prefill prompting pattern
+description: HandCodec usage examples — encode/decode, resilience pipeline, MemoBuilder, prefill pattern, end-to-end multi-agent pipeline
 doc_id: workflow.hand-codec-examples
 type: workflow
 status: active
@@ -208,4 +208,59 @@ CompressionTier tier = cls switch
 };
 ```
 
-This is the policy layer that lives **outside** HandCodec — the codec gives you the enum, you choose what to do with it.
+
+
+## 10. End-to-end multi-agent pipeline
+
+This example connects all building blocks: encode → resilience parse → memo → batch.
+
+```csharp
+// ── Step 1: Agent A (Classification) encodes a Result ──
+string wire = HandEncoder.Result("high_priority", ("C", "0.94"), ("S", "verified"));
+// → "R|V=high_priority|C=0.94|S=verified"
+
+// ── Step 2: Orchestrator receives raw model output (possibly noisy) ──
+string rawOutput = """
+    ```hand
+    R|V=high_priority|C=0.94|S=verified
+    ```
+    """;
+
+var parsed = HandResiliencePipeline.Parse(rawOutput);
+
+// Inspect degradation level — early warning signal
+if (parsed.Level >= 4)
+    Console.WriteLine($"Warning: model at resilience Level {parsed.Level}");
+
+double confidence = parsed.Message.GetDoubleOr("C", 0.0);
+string value = parsed.Message.Get("V")!;
+
+// ── Step 3: Build downstream Memo for Agent B (Extraction) ──
+string memo = new MemoBuilder(CompressionTier.Balanced)
+    .Layer(2)
+    .Field("task", "extract")
+    .Field("prio", "high")
+    .Field("src", $"L1:{value}")
+    .Build();
+// → "M|L=2|task=extract|prio=high|src=L1:high_priority"
+
+// ── Step 4: Agent B receives a batch of Memos ──
+string batch = memo + "\n" + HandEncoder.Memo(
+    ("L", "2"), ("task", "summarize"), ("prio", "low"));
+var memos = HandParser.ParseBatch(batch);
+// memos[0].Get("task") → "extract"
+// memos[1].Get("task") → "summarize"
+
+// ── Step 5: Resilience on every received message ──
+foreach (var m in memos)
+{
+    var resilient = HandResiliencePipeline.Parse(m.RawMessage);
+    Console.WriteLine(
+        $"{resilient.Message.Get("task")} — confidence {resilient.Message.GetDoubleOr("C", -1)} — Level {resilient.Level}");
+}
+```
+
+This is the policy layer that lives **outside** HandCodec — the codec gives you the enum,
+you choose what to do with it. The full orchestrator loop is documented in
+[Building a Pipeline with HandCodec](../docs/pipeline-guide.md).
+

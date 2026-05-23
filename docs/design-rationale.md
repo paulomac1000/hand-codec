@@ -66,6 +66,11 @@ Mapping from the original 9:
 | ConvergentInternal, ConvergentOutput | **Reasoning** |
 | _(new)_ | **External** |
 
+The [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist) project validates
+these classes empirically: Bielik 1.5B lands in Assisted (needs `R|value=` prefill), while
+Qwen 2.5 7B lands in Native (immediate compliance with `R|`). The classification is
+behavioural — the same model can shift classes under different system prompts or temperatures.
+
 ## Why protocol name must never appear in prompts
 
 Models that "know" they are speaking a protocol exhibit adversarial behaviour:

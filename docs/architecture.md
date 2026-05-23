@@ -99,6 +99,20 @@ Level 5  Passthrough           Unstructured raw text (always succeeds)
 
 Each level returns a `ResilienceResult(Level, Message, ElapsedMs)`. Use the `Level` field as a degradation signal — if you see level 4 firing consistently, the model is drifting and you should re-probe.
 
+### When Level 5 fires — caller strategies
+
+Level 5 (passthrough, `IsUnstructured == true`) is not a failure — it is a signal.
+What to do depends on the degradation pattern:
+
+| Degradation pattern | Action |
+|---|---|
+| Single Level 5 among mostly Level 1–2 | One-off noise — accept raw text, log metric |
+| Level 5 > 10% of calls | Model is losing format — drop temperature by 0.1–0.2, re-probe |
+| Spikes after prompt change | Roll back the prompt — the new prompt broke format compliance |
+| Mixed Level 4 + Level 5 | Model is drifting — re-run System Ping to re-establish priming |
+| 100% Level 5 on all calls | Model ignores the format entirely — fall back to plaintext pipeline or switch model class |
+
+
 ### Per-level access
 
 Each degradation level is also exposed as a standalone public method:

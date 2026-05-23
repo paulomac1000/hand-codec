@@ -98,9 +98,13 @@ hardware that costs less than the monthly bill for a single cloud model:
   plaintext — two `M|` lines carry what used to take 8–10 lines of labeled text.
 - **No per-token billing.** The entire pipeline runs on local Ollama. Zero cloud APIs.
 
-See [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist) for a reference
-implementation — a multi-layer pipeline using HandCodec for inter-agent communication,
-running entirely on consumer hardware.
+See [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist) for a living
+reference implementation — a multi-layer pipeline where five small open-weight models
+coordinate entirely via HandCodec Memos, running on a single GTX 1060 (6 GB VRAM).
+Key files to study in that repo:
+- `NegotiationCache.cs` — Implicit Priming with `HandEncoder.Probe()` and System Ping/Ack
+- `Layer*.cs` — each layer encodes Results/Memos, parsed with `HandResiliencePipeline.Parse()`
+- `ConversationBuilder.cs` — `HandRuntime` wiring with `HandCheckpointLibrary`
 
 ## Wire format
 
