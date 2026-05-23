@@ -9,7 +9,7 @@ Imagine AI models as foreign construction workers on a massive building site. Th
 standard (JSON) forces them to write formal, multi-page bureaucratic letters with stamps
 just to say *"I found a fault."* If the letter is missing one comma, the entire site grinds
 to a halt with a critical error. This burns tokens, burns money, and demands the most
-expensive workers (GPT-4, Claude) just to avoid typos.
+expensive workers (GPT-5, Claude) just to avoid typos.
 
 **H.A.N.D.** (Hierarchical Adaptive Negotiation Dialect) introduces a **Pidgin language**
 to the site — ultra-short hand signals and whistles that even the cheapest worker from the
