@@ -46,7 +46,7 @@ The grammar is intentionally permissive on `value` (any printable except `|`) an
 | `E` Error | `E\|code=500\|msg=Connection refused` | `\|` in msg → encoder throws |
 | `B` Batch | `B\|count=3\|t=summarize,extract,classify\|d=...` | Documents Base64-encoded |
 | `A` Answer | `A\|content=Paris` | No confidence required |
-| `M` Memo | `M\|L=2\|em=anxiety\|sv=moderate` | Inter-layer context |
+| `M` Memo | `M\|L=2\|tx=classify\|pr=high` | Inter-agent context |
 
 ## Probe canonical form — `key=value` always
 
@@ -77,22 +77,20 @@ Encoder emits in this order. Parser accepts any order. Reordering at parse time 
 
 ## Compression tiers — key aliases
 
-| Field | Debug | Balanced | Compact |
-|-------|-------|----------|---------|
+`MemoBuilder` uses generic `Field(key, value)` only. The compression tier controls which key names the builder uses. Below are example aliases for a multi-agent task pipeline — consumers define their own domains:
+
+| Concept | Debug | Balanced | Compact |
+|---------|-------|----------|---------|
 | value | `value` | `V` | `V` |
 | confidence | `confidence` | `C` | `C` |
 | ambiguity | `ambiguity` | `A` | `A` |
 | note | `note` | `N` | `N` |
-| emotional_state | `emotional_state` | `em` | `e` |
-| severity | `severity` | `sv` | `s` |
-| approach | `approach` | `ap` | `a` |
-| key_question | `key_question` | `kq` | `k` |
-| risk_indicators | `risk_indicators` | `ri` | `r` |
-| technique | `technique` | `tk` | `t` |
-| session_goal | `session_goal` | `sg` | `g` |
-| crisis_flag | `crisis_flag` | `cf` | `!` |
-
-`MemoBuilder` chooses the right alias for the active tier.
+| task_type | `task_type` | `task` | `tx` |
+| priority | `priority` | `prio` | `pr` |
+| status | `status` | `stat` | `st` |
+| tags | `tags` | `tags` | `tg` |
+| source_agent | `source_agent` | `src` | `sl` |
+| target_agent | `target_agent` | `tgt` | `tl` |
 
 ## Batch format
 
@@ -111,7 +109,7 @@ The parser splits the multi-message stream on the regex `(?m)^[RIPCBEAM]\|` — 
 
 ```
 R|V=56|C=0.94
-Tutaj model swobodnie generuje prozę. Parser jej nie dotyka.
+The model freely generates prose here. The parser ignores it.
 ```
 
 The parser reads only the first non-blank line. Narrative is preserved on `ParsedHandMessage.RawMessage` if the caller needs it.
@@ -139,6 +137,7 @@ Helpers: `Get(key)`, `GetInt(key)`, `GetDouble(key)`, `GetBool(key)` — all ret
 |-----------|----------------------|
 | `Parse(encoded) == original payload` for all performatives | `HandParserEncoderTests.RoundTrip*` |
 | `HandResiliencePipeline.Parse` never returns null | `HandResiliencePipelineTests.*Unstructured` |
+| Per-level methods (ParseStrict, ParseLenient, etc.) never return null | `HandResiliencePipelineTests.*NeverReturnsNull` |
 | `AgentClass` has exactly 4 values | `HandResiliencePipelineTests.AgentClass_HasExactly4Values` |
 | `Probe(q, ack)` produces `P\|q=...\|ack=...` | `HandEncoderTests.Probe_*` |
 | Batch injection via `R|` in payload is contained | `HandParserTests.Batch_InjectionGuard` |

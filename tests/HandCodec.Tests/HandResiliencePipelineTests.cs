@@ -38,7 +38,7 @@ public sealed class HandResiliencePipelineTests
     }
 
     [Theory]
-    [InlineData("confidence: 0.87\nanswer: the result is 42")]
+    [InlineData("confidence: 0.87\nvalue: the result is 42")]
     [InlineData("result=hello world\nconf=0.95")]
     public void Parse_SemanticExtraction_ReturnsLevel4(string input)
     {
@@ -63,7 +63,7 @@ public sealed class HandResiliencePipelineTests
     public void Parse_NoHandStructure_FallsToLevel5_Regardless()
     {
         var opts = new HandResilientOptions(EnableMarkdownStrip: false, EnableSemanticExtraction: false);
-        const string input = "I understand your concerns and want to help you through this.";
+        const string input = "This is a plain text response with no structure at all.";
         var r = HandResiliencePipeline.Parse(input, opts);
         r.Level.Should().Be(5);
         r.Message.IsUnstructured.Should().BeTrue();
@@ -107,56 +107,191 @@ public sealed class HandResiliencePipelineTests
     }
 
     [Fact]
-    public void Parse_SemanticExtraction_RecoversMemoFromElaborateText()
+    public void Parse_SemanticExtraction_RecoversMemoFromGenericText()
     {
-        const string raw = "Emotional state: anxiety\nSeverity: moderate\nRisk indicators: insomnia";
+        const string raw = "Task type: classify\nPriority: high\nStatus: ok";
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
         r.Level.Should().Be(4);
         r.Message.Performative.Should().Be(Performative.Memo);
-        r.Message.Get("em").Should().Be("anxiety");
-        r.Message.Get("sv").Should().Be("moderate");
-        r.Message.Get("ri").Should().Be("insomnia");
+        r.Message.Get("task_type").Should().Be("classify");
+        r.Message.Get("priority").Should().Be("high");
+        r.Message.Get("status").Should().Be("ok");
     }
 
     [Fact]
-    public void Parse_SemanticExtraction_RecoversMemoWithAllFields()
+    public void Parse_SemanticExtraction_RecoversMemoWithAllGenericFields()
     {
-        const string raw = "Emotional state: exhaustion with anxiety\n"
-            + "Severity: moderate\n"
-            + "Risk indicators: insomnia, worry\n"
-            + "Cognitive patterns: catastrophizing\n"
-            + "Approach: reflective listening\n"
-            + "Technique: open question\n"
-            + "Key question: What keeps you up at night?\n"
-            + "Risk note: none";
+        const string raw = "Task type: extract_entities\n"
+            + "Priority: high\n"
+            + "Source layer: L1\n"
+            + "Target layer: L2\n"
+            + "Tags: urgent, verified\n"
+            + "Status: pending";
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
         r.Level.Should().Be(4);
         r.Message.Performative.Should().Be(Performative.Memo);
-        r.Message.Get("em").Should().Be("exhaustion with anxiety");
-        r.Message.Get("sv").Should().Be("moderate");
-        r.Message.Get("ri").Should().Be("insomnia, worry");
-        r.Message.Get("cp").Should().Be("catastrophizing");
-        r.Message.Get("ap").Should().Be("reflective listening");
-        r.Message.Get("tk").Should().Be("open question");
-        r.Message.Get("kq").Should().Be("What keeps you up at night?");
-        r.Message.Get("rn").Should().Be("none");
+        r.Message.Get("task_type").Should().Be("extract_entities");
+        r.Message.Get("priority").Should().Be("high");
+        r.Message.Get("source_layer").Should().Be("L1");
+        r.Message.Get("target_layer").Should().Be("L2");
+        r.Message.Get("tags").Should().Be("urgent, verified");
+        r.Message.Get("status").Should().Be("pending");
     }
 
     [Fact]
     public void Parse_SemanticExtraction_PrefersResultWhenConfidencePresent()
     {
-        const string raw = "confidence: 0.95\nanswer: anxiety detected\nemotional state: anxiety";
+        const string raw = "confidence: 0.95\nvalue: task completed successfully\nstatus: ok";
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
         r.Level.Should().Be(4);
         r.Message.Performative.Should().Be(Performative.Result,
-            "when confidence+answer keywords are found, Result takes priority over Memo");
+            "when confidence+value keywords are found, Result takes priority over Memo");
         r.Message.GetDouble("C").Should().BeApproximately(0.95, 0.001);
+    }
+
+    // ─── Per-level method tests ─────────────────────────────────────────
+
+    [Fact]
+    public void ParseStrict_ValidHand_ReturnsParsedMessage()
+    {
+        var msg = HandResiliencePipeline.ParseStrict("R|V=56|C=0.9");
+        msg.IsUnstructured.Should().BeFalse();
+        msg.Get("V").Should().Be("56");
+    }
+
+    [Fact]
+    public void ParseStrict_InvalidHand_ReturnsUnstructured()
+    {
+        var msg = HandResiliencePipeline.ParseStrict("garbage text");
+        msg.IsUnstructured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseStrict_NeverReturnsNull()
+    {
+        var msg = HandResiliencePipeline.ParseStrict("");
+        msg.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ParseLenient_FindsMessageInPreamble()
+    {
+        var msg = HandResiliencePipeline.ParseLenient("preamble\nR|V=42|C=0.88\ntrailing");
+        msg.IsUnstructured.Should().BeFalse();
+        msg.Get("V").Should().Be("42");
+    }
+
+    [Fact]
+    public void ParseLenient_NoMessage_ReturnsUnstructured()
+    {
+        var msg = HandResiliencePipeline.ParseLenient("no performative here");
+        msg.IsUnstructured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseLenient_NeverReturnsNull()
+    {
+        var msg = HandResiliencePipeline.ParseLenient("");
+        msg.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ParseWithMarkdownStrip_StripsFences_ReturnsParsed()
+    {
+        var msg = HandResiliencePipeline.ParseWithMarkdownStrip("```\nR|V=56|C=0.9\n```");
+        msg.IsUnstructured.Should().BeFalse();
+        msg.Get("V").Should().Be("56");
+    }
+
+    [Fact]
+    public void ParseWithMarkdownStrip_NoFences_ReturnsUnstructured()
+    {
+        var msg = HandResiliencePipeline.ParseWithMarkdownStrip("plain text without fences");
+        msg.IsUnstructured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWithMarkdownStrip_NeverReturnsNull()
+    {
+        var msg = HandResiliencePipeline.ParseWithMarkdownStrip("");
+        msg.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ParseSemantic_ExtractsKeyValuePairs()
+    {
+        var msg = HandResiliencePipeline.ParseSemantic("Task type: summarize\nPriority: low\nSource: agent-alpha");
+        msg.IsUnstructured.Should().BeFalse();
+        msg.Get("task_type").Should().Be("summarize");
+        msg.Get("priority").Should().Be("low");
+    }
+
+    [Fact]
+    public void ParseSemantic_NoPattern_ReturnsUnstructured()
+    {
+        var msg = HandResiliencePipeline.ParseSemantic("this is just a sentence");
+        msg.IsUnstructured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseSemantic_ExtractsAnyDomainKeys()
+    {
+        const string raw = "Request ID: req-12345\nComponent: auth-service\nAction: restart\nTimeout ms: 5000";
+        var msg = HandResiliencePipeline.ParseSemantic(raw);
+
+        msg.IsUnstructured.Should().BeFalse();
+        // Keys are normalised: spaces → underscores, lowercased
+        msg.Get("request_id").Should().Be("req-12345");
+        msg.Get("component").Should().Be("auth-service");
+        msg.Get("action").Should().Be("restart");
+        msg.Get("timeout_ms").Should().Be("5000");
+    }
+
+    [Fact]
+    public void ParseSemantic_ExtractsEqualsSeparatedKeys()
+    {
+        var msg = HandResiliencePipeline.ParseSemantic("status=ok\nerror_count=0\nlast_check=2024-01-01");
+        msg.IsUnstructured.Should().BeFalse();
+        msg.Get("status").Should().Be("ok");
+        msg.Get("error_count").Should().Be("0");
+        msg.Get("last_check").Should().Be("2024-01-01");
+    }
+
+    [Fact]
+    public void ParseSemantic_NeverReturnsNull()
+    {
+        var msg = HandResiliencePipeline.ParseSemantic("");
+        msg.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void TryExtractGenericKeyValues_EmptyString_ReturnsNull()
+    {
+        var result = HandResiliencePipeline.TryExtractGenericKeyValues("");
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryExtractGenericKeyValues_NormalisesSpacesToUnderscores()
+    {
+        var result = HandResiliencePipeline.TryExtractGenericKeyValues("My Custom Field: some value");
+        result.Should().NotBeNull();
+        result!.Should().ContainKey("my_custom_field");
+        result!["my_custom_field"].Should().Be("some value");
+    }
+
+    [Fact]
+    public void TryExtractGenericKeyValues_DeduplicatesByFirstOccurrence()
+    {
+        var result = HandResiliencePipeline.TryExtractGenericKeyValues("status: first\nstatus: second");
+        result.Should().NotBeNull();
+        result!["status"].Should().Be("first");
     }
 }
 

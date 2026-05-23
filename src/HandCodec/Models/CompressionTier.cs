@@ -6,7 +6,7 @@ namespace HandCodec.Models;
 /// </summary>
 public enum CompressionTier
 {
-    /// <summary>Debug: full field names (emotional_state=, severity=). Human-readable for diagnostics.</summary>
+    /// <summary>Debug: full field names (task_type=, priority=). Human-readable for diagnostics.</summary>
     Debug = 0,
 
     /// <summary>Balanced: short aliases (em=, sv=). Good default for Assisted-class models.</summary>

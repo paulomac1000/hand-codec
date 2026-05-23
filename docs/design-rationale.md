@@ -1,5 +1,5 @@
 ---
-description: HandCodec design rationale — why pipe-delimited key=value, why 5 resilience levels, why 4 AgentClasses. Synthesised from cortexa audit findings
+description: HandCodec design rationale — why pipe-delimited key=value, why 5 resilience levels, why 4 AgentClasses. Synthesised from audit findings
 doc_id: ref.hand-codec-rationale
 type: ref
 status: active
@@ -35,14 +35,14 @@ The original H.A.N.D. protocol assumed models would emit valid wire format on ev
 1. **Strict** — happy path; cost is zero.
 2. **Lenient** — model emitted preamble. Parse the right line.
 3. **MarkdownStrip** — model wrapped output in ` ``` ` fences. Unwrap, then lenient.
-4. **SemanticExtraction** — model gave free-form prose with hints (`confidence: 0.87`). Regex out what we can.
+4. **SemanticExtraction** — model gave free-form prose with hints (`confidence: 0.87`). Generic key:value regex extracts what we can.
 5. **Passthrough** — give up structurally, but keep the raw text. Caller decides.
 
 Production behaviour: log the level on every call. A rising level distribution is the **early-warning signal** for model drift, prompt regression, or upstream provider issues.
 
 ## Why 4 AgentClasses (down from 9)
 
-The cortexa codebase had 9 classes: `Direct`, `Structured`, `Hybrid`, `ConvergentInternal`, `ConvergentOutput`, `Resistant`, `Minimal`, `ProtocolEngineer`, `Chaotic`. The audit identified three problems:
+The reference codebase had 9 classes: `Direct`, `Structured`, `Hybrid`, `ConvergentInternal`, `ConvergentOutput`, `Resistant`, `Minimal`, `ProtocolEngineer`, `Chaotic`. The audit identified three problems:
 
 1. **Behavioural unobservability** — `ConvergentInternal` vs `ConvergentOutput` is only distinguishable by `usage.reasoning_tokens`, not by parse outcome. They are the same class operationally.
 2. **Symptom-as-class** — `Chaotic` is what happens to an `Assisted` model under load. It is a degradation state, not a permanent classification.
@@ -76,7 +76,7 @@ Models that "know" they are speaking a protocol exhibit adversarial behaviour:
 
 The fix is implicit modelling. The system prompt shows examples (`R|V=42|C=0.9`) and the assistant turn is prefilled with `R|`. The model learns the pattern from context, not from being told. This matches research on emergent communication (Lazaridou, DeepMind; Meta FAIR pidgin experiments) — pressure plus examples produce stable protocols.
 
-This is enforced by a STRICT rule in `.agents/rules/protocol-hand.md` in cortexa, and by **omission** in HandCodec — no part of this codec ever produces a system prompt with the protocol name.
+This is enforced by **omission** in HandCodec — no part of this codec ever produces a system prompt with the protocol name.
 
 ## Why narrative split (line 1 = data, line 2+ = prose)
 
@@ -99,10 +99,10 @@ Machine metadata stays in a tight window (~10-20 tokens). Prose is free to be lo
 
 ## Why these things are NOT in HandCodec
 
-The cortexa repo had a `Cortexa.Protocol.Hand.Cache` namespace with `ProtocolNegotiator`, `DriftWorkerService`, feature flags, and a probing engine. **None of that ships in HandCodec.** Why:
+The original codebase had negotiation caches, drift detection workers, feature flags, and a probing engine. **None of that ships in HandCodec.** Why:
 
 - **Stateless contract** — a codec library should be pure: input → output, no side effects, no I/O.
-- **Pluggability** — different runtimes need different negotiation strategies. A static profile YAML is right for a self-hosted demo; a live probe-on-drift is right for a multi-tenant SaaS. Pinning one choice into the codec foreclosed the others.
+- **Pluggability** — different runtimes need different negotiation strategies. A static profile is right for a self-hosted demo; a live probe-on-drift is right for a multi-tenant SaaS. Pinning one choice into the codec foreclosed the others.
 - **NuGet hygiene** — every dependency the codec takes is a transitive burden on every consumer. The codec has *zero* runtime dependencies beyond the BCL.
 
 If you need negotiation or probing, build it on top. The codec gives you the parse/encode primitives and the `AgentClass` enum to key your policy on.

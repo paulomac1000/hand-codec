@@ -37,7 +37,7 @@ format with two primary modes:
 - **`M|` (Memo) — Machine-to-Machine Telepathy.** Used when one agent passes structured
   data to another. Compact, parseable, zero prose.
   ```
-  M|L=2|em=anxiety|sv=moderate|ri=insomnia|cp=worry
+  M|L=2|tx=classify|pr=high|tg=urgent
   ```
 
 The encoder emits canonical field ordering (`V` → `C` → `A` → `N`). The parser accepts
@@ -61,10 +61,9 @@ The model is a stochastic parrot. It sees a pattern in the conversation history 
 subconsciously continues it. It uses H.A.N.D. because from its perspective, *this is just
 how people talk here.* No instructions. No "you must respond in format X." No arguments.
 
-The `[SYSTEM_PROTOCOL_ACK]` text is deliberately **non-domain** — in a therapy app it
-contains no clinical words, in a coding app it contains no code. This is a **stateless
-cache**: every call starts fresh with the same ping. No persistent negotiation state.
-No context pollution.
+The `[SYSTEM_PROTOCOL_ACK]` text is deliberately **non-domain** — it contains no
+task-specific words, no domain vocabulary. This is a **stateless cache**: every call
+starts fresh with the same ping. No persistent negotiation state. No context pollution.
 
 ### Pillar 3 — The Resilience Ladder
 
@@ -83,8 +82,8 @@ a sieve with increasingly larger holes:
 `HandResiliencePipeline.Parse()` **never returns null**. Falls through to Level 5.
 No try/catch needed at the call site. No HTTP 500 from a missing bracket.
 
-Level 4 also recovers `M|` Memo fields from prose — if the model writes *"Emotional
-state: anxiety, Severity: moderate"*, the codec builds `M|L=2|em=anxiety|sv=moderate`.
+Level 4 also recovers `M|` Memo fields from prose — if the model writes *"Task type:
+classify, Priority: high"*, the codec builds `M|L=2|task_type=classify|priority=high`.
 
 ### What H.A.N.D. Enables — AI Cost Engineering
 
@@ -99,9 +98,9 @@ hardware that costs less than the monthly bill for a single cloud model:
   plaintext — two `M|` lines carry what used to take 8–10 lines of labeled text.
 - **No per-token billing.** The entire pipeline runs on local Ollama. Zero cloud APIs.
 
-The [Hybrid Therapist](../hybrid-therapist) project is a living proof-of-concept: a
-17-layer Polish therapy pipeline where five small models communicate exclusively in
-H.A.N.D., running entirely on a GTX 1060 with 6 GB VRAM.
+See [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist) for a reference
+implementation — a multi-layer pipeline using HandCodec for inter-agent communication,
+running entirely on consumer hardware.
 
 ## Wire format
 
@@ -122,7 +121,7 @@ Line 1 = machine metadata. Line 2+ = narrative (optional, for human context).
 | `E` | Error | `E|code=500|msg=timeout` |
 | `B` | Batch | `B|count=3` |
 | `A` | Answer | `A|content=Paris` |
-| `M` | Memo | `M|L=2|em=anxiety|sv=moderate` |
+| `M` | Memo | `M|L=2|tx=classify|pr=high` |
 
 ### Canonical R field ordering
 
@@ -151,6 +150,13 @@ msg.GetDouble("C");   // 0.94
 // Resilience pipeline — never returns null
 var result = HandResiliencePipeline.Parse(rawModelOutput);
 // result.Level: 1=strict, 2=lenient, 3=markdown_strip, 4=semantic, 5=unstructured
+
+// Per-level access — each returns ParsedHandMessage (never null)
+var strict = HandResiliencePipeline.ParseStrict("R|V=56|C=0.94");
+// strict.IsUnstructured → false
+
+var semantic = HandResiliencePipeline.ParseSemantic("task: classify, confidence: 0.9");
+// semantic.Get("task") → "classify"
 ```
 
 ## AgentClass
@@ -172,11 +178,20 @@ See **Pillar 3** above for the full description. Quick reference:
 Level 1: Strict parse         — R|V=56|C=0.9
 Level 2: Lenient scan         — preamble + R|V=56
 Level 3: Markdown strip       — ```\nR|V=56\n```
-Level 4: Semantic extraction  — "confidence: 0.87, answer: 42" or "Emotional state: anxiety..."
+Level 4: Semantic extraction  — "confidence: 0.87, value: 42" or "Task type: classify..."
 Level 5: Passthrough          — unstructured (IsUnstructured=true)
 ```
 
 `HandResiliencePipeline.Parse()` never returns null. Falls through to Level 5.
+
+Each level is also exposed as a standalone method:
+- `ParseStrict(raw)` — Level 1
+- `ParseLenient(raw)` — Level 2
+- `ParseWithMarkdownStrip(raw)` — Level 3
+- `ParseSemantic(raw)` — Level 4
+
+All per-level methods return `ParsedHandMessage` (never null). Check `IsUnstructured`
+to see if that level succeeded.
 
 ## MemoBuilder
 
@@ -184,14 +199,15 @@ Level 5: Passthrough          — unstructured (IsUnstructured=true)
 // MemoBuilder is 100% domain-agnostic — uses generic Field(key, value) only
 string memo = new MemoBuilder(CompressionTier.Balanced)
     .Layer(2)
-    .Field("em", "anxiety")
-    .Field("sv", "moderate")
-    .Field("ap", "CBT")
+    .Field("task", "classify")
+    .Field("prio", "high")
+    .Field("tags", "urgent,verified")
     .Build();
-// → "M|L=2|em=anxiety|sv=moderate|ap=CBT"
+// → "M|L=2|task=classify|prio=high|tags=urgent,verified"
 ```
 
-Domain-specific semantic names (`.EmotionalState()`, `.Severity()`, etc.) can be added as C# extension methods in consuming applications.
+Domain-specific semantic names can be added as C# extension methods in consuming
+applications. The codec itself stays generic.
 
 ## Batch injection guard
 

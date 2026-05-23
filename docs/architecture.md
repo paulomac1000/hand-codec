@@ -55,7 +55,7 @@ Line 2 and beyond is **narrative** — free-form prose for the human reader. The
 | `E` | Error | Failure with code and message |
 | `B` | Batch | Multi-task request header |
 | `A` | Answer | Lightweight reply (no confidence required) |
-| `M` | Memo | Inter-layer context envelope |
+| `M` | Memo | Inter-agent context envelope |
 
 The protocol name is never mentioned to the model. Instead, format hints in the system prompt show implicit examples (`R|V=42|C=0.9`) and the assistant turn is prefilled with `R|`.
 
@@ -91,13 +91,26 @@ P|2+2=4|ACK=True     ✗ old-style, not produced by encoder
 Level 1  StrictParseStage      Direct regex against ^[RIPCBEAM]\|
 Level 2  LenientParseStage     Line-scan; tolerates preamble
 Level 3  MarkdownStripStage    Strip ```fences``` then re-parse
-Level 4  SemanticExtractionStage  Regex for "confidence:" / "value:"
+Level 4  SemanticExtractionStage  Generic key:value extraction from prose
 Level 5  Passthrough           Unstructured raw text (always succeeds)
 ```
 
 `HandResiliencePipeline.Parse()` **never returns null**. If level 1-4 all fail, level 5 wraps the raw text in `ParsedHandMessage.Unstructured(raw)` and the caller can decide whether to fail open or retry.
 
 Each level returns a `ResilienceResult(Level, Message, ElapsedMs)`. Use the `Level` field as a degradation signal — if you see level 4 firing consistently, the model is drifting and you should re-probe.
+
+### Per-level access
+
+Each degradation level is also exposed as a standalone public method:
+
+```csharp
+ParsedHandMessage strict  = HandResiliencePipeline.ParseStrict(raw);
+ParsedHandMessage lenient = HandResiliencePipeline.ParseLenient(raw);
+ParsedHandMessage stripped = HandResiliencePipeline.ParseWithMarkdownStrip(raw);
+ParsedHandMessage semantic = HandResiliencePipeline.ParseSemantic(raw);
+```
+
+All four return `ParsedHandMessage` (never null). Check `IsUnstructured` to determine if that level succeeded.
 
 ## AgentClass — four behavioural classes
 
@@ -116,11 +129,11 @@ The mapping is **behavioural, not static** — the same model can land in differ
 
 | Tier | Example key | Use when |
 |------|-------------|----------|
-| `Debug` | `emotional_state=` | Logs, human debugging, External-class agents |
-| `Balanced` | `em=` | Default for Assisted-class small models |
-| `Compact` | `e=` | Native/Reasoning class with stable structure |
+| `Debug` | `task_type=` | Logs, human debugging, External-class agents |
+| `Balanced` | `task=` | Default for Assisted-class small models |
+| `Compact` | `tx=` | Native/Reasoning class with stable structure |
 
-`MemoBuilder` uses the generic `.Field(key, value)` API to emit keys for the configured tier. Domain-specific semantic names (`.EmotionalState()`, `.Severity()`, and others) are provided as C# **extension methods** in the consuming application — the codec itself remains 100% domain-agnostic.
+`MemoBuilder` uses the generic `.Field(key, value)` API to emit keys for the configured tier. Consumers define their own domain-specific key mappings as C# **extension methods** — the codec itself remains 100% domain-agnostic.
 
 ## Batch parsing — injection guard
 
@@ -131,9 +144,9 @@ The mapping is **behavioural, not static** — the same model can land in differ
 By design, the following are not part of the codec:
 
 - **HandRuntime**: Implicit Priming orchestration, ConversationBuilder, WireConvention, CheckpointLibrary, ResponseDecoder (separate `src/HandRuntime/` project in the same solution)
-- `ProtocolNegotiator` and the entire negotiation cache (`Cortexa.Protocol.Hand.Cache`)
+- `ProtocolNegotiator` and the entire negotiation cache
 - `DriftWorkerService`, bulkhead decorators, feature-flagged variants
-- Probing engine (`src/tools/probing/`)
+- Probing engine
 - Any Ollama, OpenRouter, MongoDB, or LanceDB binding
 
 These belong to the runtime layer (`HandRuntime`) or the consuming application. The codec is stateless and dependency-free so it can ship independently as a NuGet package.

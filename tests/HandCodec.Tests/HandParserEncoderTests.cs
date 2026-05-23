@@ -349,25 +349,25 @@ public sealed class HandEncoderTests
     [Fact]
     public void RoundTrip_Memo_ParsesBack()
     {
-        string encoded = HandEncoder.Memo(("L", "2"), ("em", "High anxiety"), ("sv", "moderate"));
+        string encoded = HandEncoder.Memo(("L", "2"), ("tx", "classify"), ("pr", "high"));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
         parsed.Should().NotBeNull();
         parsed!.Performative.Should().Be(Performative.Memo);
         parsed.GetInt("L").Should().Be(2);
-        parsed.Get("em").Should().Be("High anxiety");
-        parsed.Get("sv").Should().Be("moderate");
+        parsed.Get("tx").Should().Be("classify");
+        parsed.Get("pr").Should().Be("high");
     }
 
     [Fact]
     public void Memo_WithPipeInValue_RequiresBase64EncodedValue()
     {
         string safeValue = Convert.ToBase64String(Encoding.UTF8.GetBytes("value|with|pipes"));
-        string encoded = HandEncoder.Memo(("ev", safeValue));
+        string encoded = HandEncoder.Memo(("d", safeValue));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
         parsed.Should().NotBeNull();
-        string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parsed!.Get("ev")!));
+        string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parsed!.Get("d")!));
         decoded.Should().Be("value|with|pipes");
     }
 
@@ -500,7 +500,7 @@ public sealed class HandEncoderTests
     [Fact]
     public void Parse_MemoPerformative_InBatch_IsFound()
     {
-        string raw = "M|L=2|em=anxious\nR|V=ok\n";
+        string raw = "M|L=2|tx=classify\nR|V=ok\n";
         var results = HandParser.ParseBatch(raw);
         results.Should().HaveCount(2);
         results[0].Performative.Should().Be(Performative.Memo);
@@ -539,12 +539,12 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Compact)
             .Layer(2)
-            .Field("e", "High anxiety")
-            .Field("s", "moderate")
-            .Field("a", "CBT")
+            .Field("tx", "classify")
+            .Field("pr", "high")
+            .Field("tg", "urgent")
             .Build();
 
-        encoded.Should().Be("M|L=2|e=High anxiety|s=moderate|a=CBT");
+        encoded.Should().Be("M|L=2|tx=classify|pr=high|tg=urgent");
     }
 
     [Fact]
@@ -552,11 +552,11 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Balanced)
             .Layer(3)
-            .Field("em", "Low")
-            .Field("cf", "true")
+            .Field("task", "extract")
+            .Field("prio", "low")
             .Build();
 
-        encoded.Should().Be("M|L=3|em=Low|cf=true");
+        encoded.Should().Be("M|L=3|task=extract|prio=low");
     }
 
     [Fact]
@@ -564,11 +564,11 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Debug)
             .Layer(1)
-            .Field("emotional_state", "anxious")
-            .Field("severity", "high")
+            .Field("task_type", "summarize")
+            .Field("priority", "high")
             .Build();
 
-        encoded.Should().Be("M|L=1|emotional_state=anxious|severity=high");
+        encoded.Should().Be("M|L=1|task_type=summarize|priority=high");
     }
 
     [Fact]
@@ -576,15 +576,15 @@ public sealed class MemoBuilderTests
     {
         string encoded = new MemoBuilder(CompressionTier.Balanced)
             .Layer(2)
-            .Field("em", "overwhelmed")
-            .Field("sv", "moderate")
+            .Field("task", "classify")
+            .Field("prio", "high")
             .Build();
 
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
         parsed.Should().NotBeNull();
         parsed!.Performative.Should().Be(Performative.Memo);
         parsed.GetInt("L").Should().Be(2);
-        parsed.Get("em").Should().Be("overwhelmed");
-        parsed.Get("sv").Should().Be("moderate");
+        parsed.Get("task").Should().Be("classify");
+        parsed.Get("prio").Should().Be("high");
     }
 }

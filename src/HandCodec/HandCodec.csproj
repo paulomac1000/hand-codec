@@ -7,4 +7,8 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="HandCodec.Tests" />
+  </ItemGroup>
+
 </Project>
