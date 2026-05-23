@@ -1,6 +1,6 @@
 using HandCodec.Models;
 using HandCodec.Parser;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace HandCodec.Tests;
@@ -18,8 +18,8 @@ public sealed class ParsedHandMessageBodyTests
     {
         ParsedHandMessage? msg = HandParser.ParseLenient("R|V=56|C=0.9");
 
-        msg.Should().NotBeNull();
-        msg!.Body.Should().BeEmpty();
+        msg.ShouldNotBeNull();
+        msg!.Body.ShouldBeEmpty();
     }
 
     [Fact]
@@ -28,9 +28,9 @@ public sealed class ParsedHandMessageBodyTests
         const string input = "R|C=0.94|V=opening line\nSecond paragraph of prose.\nThird line.";
         ParsedHandMessage? msg = HandParser.ParseLenient(input);
 
-        msg.Should().NotBeNull();
-        msg!.Get("V").Should().Be("opening line");
-        msg.Body.Should().Be("Second paragraph of prose.\nThird line.");
+        msg.ShouldNotBeNull();
+        msg!.Get("V").ShouldBe("opening line");
+        msg.Body.ShouldBe("Second paragraph of prose.\nThird line.");
     }
 
     [Fact]
@@ -39,9 +39,9 @@ public sealed class ParsedHandMessageBodyTests
         const string input = "model preamble\nR|V=56|C=0.9\ntrailing narrative";
         ParsedHandMessage? msg = HandParser.ParseLenient(input);
 
-        msg.Should().NotBeNull();
-        msg!.RawMessage.Should().Be(input);
-        msg.Body.Should().Be("trailing narrative");
+        msg.ShouldNotBeNull();
+        msg!.RawMessage.ShouldBe(input);
+        msg.Body.ShouldBe("trailing narrative");
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public sealed class ParsedHandMessageBodyTests
         const string input = "```\nR|C=0.9|V=x\nbody text here\n```";
         ParsedHandMessage? msg = HandParser.ParseLenient(input);
 
-        msg.Should().NotBeNull();
-        msg!.Body.Should().Be("body text here");
+        msg.ShouldNotBeNull();
+        msg!.Body.ShouldBe("body text here");
     }
 
     [Fact]
@@ -59,8 +59,8 @@ public sealed class ParsedHandMessageBodyTests
     {
         ParsedHandMessage? msg = HandParser.Parse("R|V=56|C=0.9");
 
-        msg.Should().NotBeNull();
-        msg!.Body.Should().BeEmpty();
+        msg.ShouldNotBeNull();
+        msg!.Body.ShouldBeEmpty();
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class ParsedHandMessageBodyTests
     {
         var r = HandResiliencePipeline.Parse("R|C=0.91|V=opener\nThe rest of the response.");
 
-        r.Message.Get("V").Should().Be("opener");
-        r.Message.Body.Should().Be("The rest of the response.");
+        r.Message.Get("V").ShouldBe("opener");
+        r.Message.Body.ShouldBe("The rest of the response.");
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class ParsedHandMessageBodyTests
     {
         var r = HandResiliencePipeline.Parse("the cat sat on the mat", HandResilientOptions.AllEnabled);
 
-        r.Message.IsUnstructured.Should().BeTrue();
-        r.Message.Body.Should().BeEmpty();
+        r.Message.IsUnstructured.ShouldBeTrue();
+        r.Message.Body.ShouldBeEmpty();
     }
 }

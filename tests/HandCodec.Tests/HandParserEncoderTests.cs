@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using HandCodec.Models;
 using HandCodec.Parser;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace HandCodec.Tests;
@@ -21,8 +21,8 @@ public sealed class HandParserTests
     {
         ParsedHandMessage? result = HandParser.Parse(message);
 
-        result.Should().NotBeNull();
-        result!.Performative.Should().Be(expected);
+        result.ShouldNotBeNull();
+        result!.Performative.ShouldBe(expected);
     }
 
     [Fact]
@@ -30,31 +30,31 @@ public sealed class HandParserTests
     {
         ParsedHandMessage? result = HandParser.Parse("R|V=56|C=0.9");
 
-        result.Should().NotBeNull();
-        result!.Get("V").Should().Be("56");
-        result.Get("C").Should().Be("0.9");
+        result.ShouldNotBeNull();
+        result!.Get("V").ShouldBe("56");
+        result.Get("C").ShouldBe("0.9");
     }
 
     [Fact]
     public void Parse_NullOrWhitespace_ReturnsNull()
     {
-        HandParser.Parse(null!).Should().BeNull();
-        HandParser.Parse("").Should().BeNull();
-        HandParser.Parse("   ").Should().BeNull();
+        HandParser.Parse(null!).ShouldBeNull();
+        HandParser.Parse("").ShouldBeNull();
+        HandParser.Parse("   ").ShouldBeNull();
     }
 
     [Fact]
     public void Parse_InvalidFormat_ReturnsNull()
     {
-        HandParser.Parse("not a hand message").Should().BeNull();
-        HandParser.Parse("X|payload=value").Should().BeNull();
+        HandParser.Parse("not a hand message").ShouldBeNull();
+        HandParser.Parse("X|payload=value").ShouldBeNull();
     }
 
     [Fact]
     public void Parse_StrictMode_OnlyMatchesFirstLine()
     {
         const string multiLine = "some preamble\nR|V=ok";
-        HandParser.Parse(multiLine).Should().BeNull();
+        HandParser.Parse(multiLine).ShouldBeNull();
     }
 
     [Fact]
@@ -63,8 +63,8 @@ public sealed class HandParserTests
         const string input = "some model preamble\nR|V=56|C=0.9\nsome trailing text";
         ParsedHandMessage? result = HandParser.ParseLenient(input);
 
-        result.Should().NotBeNull();
-        result!.Performative.Should().Be(Performative.Result);
+        result.ShouldNotBeNull();
+        result!.Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public sealed class HandParserTests
         const string input = "> R|V=56|C=0.9";
         ParsedHandMessage? result = HandParser.ParseLenient(input);
 
-        result.Should().NotBeNull();
-        result!.Performative.Should().Be(Performative.Result);
+        result.ShouldNotBeNull();
+        result!.Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
@@ -83,16 +83,16 @@ public sealed class HandParserTests
         const string input = "R|V=first\nR|V=second";
         ParsedHandMessage? result = HandParser.ParseLenient(input);
 
-        result.Should().NotBeNull();
-        result!.Get("V").Should().Be("first");
+        result.ShouldNotBeNull();
+        result!.Get("V").ShouldBe("first");
     }
 
     [Fact]
     public void ParseLenient_NullOrWhitespace_ReturnsNull()
     {
-        HandParser.ParseLenient(null!).Should().BeNull();
-        HandParser.ParseLenient("").Should().BeNull();
-        HandParser.ParseLenient("no hand message here").Should().BeNull();
+        HandParser.ParseLenient(null!).ShouldBeNull();
+        HandParser.ParseLenient("").ShouldBeNull();
+        HandParser.ParseLenient("no hand message here").ShouldBeNull();
     }
 
     [Fact]
@@ -100,8 +100,8 @@ public sealed class HandParserTests
     {
         string raw = "R|agent=test|class=Native|V=1.0\nsome extra content\nmore content";
         var result = HandParser.ParseWithFirstLineExtraction(raw);
-        result.Should().NotBeNull();
-        result!.Performative.Should().Be(Performative.Result);
+        result.ShouldNotBeNull();
+        result!.Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
@@ -109,14 +109,14 @@ public sealed class HandParserTests
     {
         string raw = "some preamble text\nR|agent=test|class=Native|V=1.0";
         var result = HandParser.ParseWithFirstLineExtraction(raw);
-        result.Should().NotBeNull();
-        result!.Performative.Should().Be(Performative.Result);
+        result.ShouldNotBeNull();
+        result!.Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
     public void ParseWithFirstLineExtraction_EmptyInput_ReturnsNull()
     {
-        HandParser.ParseWithFirstLineExtraction("").Should().BeNull();
+        HandParser.ParseWithFirstLineExtraction("").ShouldBeNull();
     }
 
     [Fact]
@@ -124,8 +124,8 @@ public sealed class HandParserTests
     {
         string raw = "R|agent=test\n";
         var results = HandParser.ParseBatch(raw);
-        results.Should().HaveCount(1);
-        results[0].Performative.Should().Be(Performative.Result);
+        results.Count.ShouldBe(1);
+        results[0].Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
@@ -133,13 +133,13 @@ public sealed class HandParserTests
     {
         string raw = "R|agent=a\nC|ack=true\nR|agent=b\n";
         var results = HandParser.ParseBatch(raw);
-        results.Should().HaveCount(3);
+        results.Count.ShouldBe(3);
     }
 
     [Fact]
     public void ParseBatch_EmptyInput_ReturnsEmpty()
     {
-        HandParser.ParseBatch("").Should().BeEmpty();
+        HandParser.ParseBatch("").ShouldBeEmpty();
     }
 }
 
@@ -151,64 +151,64 @@ public sealed class ParsedHandMessageTests
     public void Get_ExistingKey_ReturnsValue()
     {
         ParsedHandMessage msg = Build("R|V=56|label=hello");
-        msg.Get("V").Should().Be("56");
-        msg.Get("label").Should().Be("hello");
+        msg.Get("V").ShouldBe("56");
+        msg.Get("label").ShouldBe("hello");
     }
 
     [Fact]
     public void Get_MissingKey_ReturnsNull()
     {
         ParsedHandMessage msg = Build("R|V=56");
-        msg.Get("missing").Should().BeNull();
+        msg.Get("missing").ShouldBeNull();
     }
 
     [Fact]
     public void GetInt_ValidInteger_ReturnsParsedValue()
     {
         ParsedHandMessage msg = Build("R|count=42");
-        msg.GetInt("count").Should().Be(42);
+        msg.GetInt("count").ShouldBe(42);
     }
 
     [Fact]
     public void GetInt_NonNumeric_ReturnsNull()
     {
         ParsedHandMessage msg = Build("R|V=abc");
-        msg.GetInt("V").Should().BeNull();
+        msg.GetInt("V").ShouldBeNull();
     }
 
     [Fact]
     public void GetDouble_ValidDouble_ReturnsParsedValue()
     {
         ParsedHandMessage msg = Build("R|C=0.9");
-        msg.GetDouble("C").Should().BeApproximately(0.9, 0.0001);
+        msg.GetDouble("C")!.Value.ShouldBe(0.9, 0.0001);
     }
 
     [Fact]
     public void GetDouble_NonNumeric_ReturnsNull()
     {
         ParsedHandMessage msg = Build("R|V=abc");
-        msg.GetDouble("V").Should().BeNull();
+        msg.GetDouble("V").ShouldBeNull();
     }
 
     [Fact]
     public void GetBool_True_ReturnsTrue()
     {
         ParsedHandMessage msg = Build("C|ack=true");
-        msg.GetBool("ack").Should().BeTrue();
+        msg.GetBool("ack").ShouldBe(true);
     }
 
     [Fact]
     public void GetBool_False_ReturnsFalse()
     {
         ParsedHandMessage msg = Build("C|ack=false");
-        msg.GetBool("ack").Should().BeFalse();
+        msg.GetBool("ack").ShouldBe(false);
     }
 
     [Fact]
     public void GetBool_NonBoolean_ReturnsNull()
     {
         ParsedHandMessage msg = Build("R|V=maybe");
-        msg.GetBool("V").Should().BeNull();
+        msg.GetBool("V").ShouldBeNull();
     }
 }
 
@@ -217,28 +217,28 @@ public sealed class HandEncoderTests
     [Fact]
     public void Result_EncodesCorrectly()
     {
-        HandEncoder.Result(("V", "56"), ("C", "0.9")).Should().Be("R|V=56|C=0.9");
+        HandEncoder.Result(("V", "56"), ("C", "0.9")).ShouldBe("R|V=56|C=0.9");
     }
 
     [Fact]
     public void Result_WithBody_PlacesBodyAfterNewline()
     {
         string wire = HandEncoder.Result("hello world", ("C", "0.95"));
-        wire.Should().Be("R|C=0.95\nhello world");
+        wire.ShouldBe("R|C=0.95\nhello world");
     }
 
     [Fact]
     public void Result_WithBody_AndFields_PreservesHeaderFields()
     {
         string wire = HandEncoder.Result("the prose answer", ("C", "0.88"), ("S", "none"));
-        wire.Should().Be("R|C=0.88|S=none\nthe prose answer");
+        wire.ShouldBe("R|C=0.88|S=none\nthe prose answer");
     }
 
     [Fact]
     public void Result_WithoutBody_OmitsNewline()
     {
         string wire = HandEncoder.Result("", ("V", "short"), ("C", "0.9"));
-        wire.Should().Be("R|V=short|C=0.9");
+        wire.ShouldBe("R|V=short|C=0.9");
     }
 
     [Fact]
@@ -246,70 +246,71 @@ public sealed class HandEncoderTests
     {
         string wire = HandEncoder.Result("prose after newline", ("C", "0.92"));
         ParsedHandMessage? parsed = HandParser.ParseLenient(wire);
-        parsed.Should().NotBeNull();
-        parsed!.GetDouble("C").Should().BeApproximately(0.92, 0.001);
-        parsed.Body.Should().Be("prose after newline");
+        parsed.ShouldNotBeNull();
+        parsed!.GetDouble("C")!.Value.ShouldBe(0.92, 0.001);
+        parsed.Body.ShouldBe("prose after newline");
     }
 
     [Fact]
     public void Instruction_EncodesCorrectly()
     {
-        HandEncoder.Instruction("light.switch", "turn_on").Should().Be("I|t=light.switch|a=turn_on");
+        HandEncoder.Instruction("light.switch", "turn_on").ShouldBe("I|t=light.switch|a=turn_on");
     }
 
     [Fact]
     public void Instruction_WithAdditional_IncludesAllFields()
     {
-        HandEncoder.Instruction("sensor", "read", ("unit", "celsius")).Should().Be("I|t=sensor|a=read|unit=celsius");
+        HandEncoder.Instruction("sensor", "read", ("unit", "celsius")).ShouldBe("I|t=sensor|a=read|unit=celsius");
     }
 
     [Fact]
     public void Probe_EncodesCorrectly()
     {
-        HandEncoder.Probe("2+2=4").Should().Be("P|q=2+2=4");
+        HandEncoder.Probe("2+2=4").ShouldBe("P|q=2+2=4");
     }
 
     [Fact]
     public void Probe_WithAck_EncodesCorrectly()
     {
-        HandEncoder.Probe("2+2=4", ack: true).Should().Be("P|q=2+2=4|ack=true");
+        HandEncoder.Probe("2+2=4", ack: true).ShouldBe("P|q=2+2=4|ack=true");
     }
 
     [Fact]
     public void Confirmation_True_EncodesCorrectly()
     {
-        HandEncoder.Confirmation(true).Should().Be("C|ack=true");
+        HandEncoder.Confirmation(true).ShouldBe("C|ack=true");
     }
 
     [Fact]
     public void Confirmation_False_EncodesCorrectly()
     {
-        HandEncoder.Confirmation(false).Should().Be("C|ack=false");
+        HandEncoder.Confirmation(false).ShouldBe("C|ack=false");
     }
 
     [Fact]
     public void Error_EncodesCorrectly()
     {
-        HandEncoder.Error(500, "Internal server error").Should().Be("E|code=500|msg=Internal server error");
+        HandEncoder.Error(500, "Internal server error").ShouldBe("E|code=500|msg=Internal server error");
     }
 
     [Fact]
     public void Error_WithPipeInMessage_Throws()
     {
         Action act = () => HandEncoder.Error(500, "bad|message");
-        act.Should().Throw<ArgumentException>().WithParameterName("message");
+        var ex = act.ShouldThrow<ArgumentException>();
+        ex.ParamName.ShouldBe("message");
     }
 
     [Fact]
     public void Batch_EncodesCorrectly()
     {
-        HandEncoder.Batch(10).Should().Be("B|count=10");
+        HandEncoder.Batch(10).ShouldBe("B|count=10");
     }
 
     [Fact]
     public void Batch_WithAdditional_IncludesAllFields()
     {
-        HandEncoder.Batch(5, ("status", "ok")).Should().Be("B|count=5|status=ok");
+        HandEncoder.Batch(5, ("status", "ok")).ShouldBe("B|count=5|status=ok");
     }
 
     [Fact]
@@ -318,10 +319,10 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Result(("V", "ok"), ("C", "1.0"));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Result);
-        parsed.Get("V").Should().Be("ok");
-        parsed.Get("C").Should().Be("1.0");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Result);
+        parsed.Get("V").ShouldBe("ok");
+        parsed.Get("C").ShouldBe("1.0");
     }
 
     [Fact]
@@ -330,10 +331,10 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Error(404, "not found");
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Error);
-        parsed.GetInt("code").Should().Be(404);
-        parsed.Get("msg").Should().Be("not found");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Error);
+        parsed.GetInt("code").ShouldBe(404);
+        parsed.Get("msg").ShouldBe("not found");
     }
 
     [Fact]
@@ -342,8 +343,8 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Confirmation(true);
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
-        parsed!.GetBool("ack").Should().BeTrue();
+        parsed.ShouldNotBeNull();
+        parsed!.GetBool("ack").ShouldBe(true);
     }
 
     [Fact]
@@ -352,11 +353,11 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Memo(("L", "2"), ("tx", "classify"), ("pr", "high"));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Memo);
-        parsed.GetInt("L").Should().Be(2);
-        parsed.Get("tx").Should().Be("classify");
-        parsed.Get("pr").Should().Be("high");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Memo);
+        parsed.GetInt("L").ShouldBe(2);
+        parsed.Get("tx").ShouldBe("classify");
+        parsed.Get("pr").ShouldBe("high");
     }
 
     [Fact]
@@ -366,9 +367,9 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Memo(("d", safeValue));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
+        parsed.ShouldNotBeNull();
         string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parsed!.Get("d")!));
-        decoded.Should().Be("value|with|pipes");
+        decoded.ShouldBe("value|with|pipes");
     }
 
     [Fact]
@@ -376,11 +377,11 @@ public sealed class HandEncoderTests
     {
         string encoded = HandEncoder.Instruction("light.switch", "turn_on", ("unit", "bool"));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Instruction);
-        parsed.Get("t").Should().Be("light.switch");
-        parsed.Get("a").Should().Be("turn_on");
-        parsed.Get("unit").Should().Be("bool");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Instruction);
+        parsed.Get("t").ShouldBe("light.switch");
+        parsed.Get("a").ShouldBe("turn_on");
+        parsed.Get("unit").ShouldBe("bool");
     }
 
     [Fact]
@@ -388,9 +389,9 @@ public sealed class HandEncoderTests
     {
         string encoded = HandEncoder.Probe("2+2=4");
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Probe);
-        parsed.Get("q").Should().Be("2+2=4");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Probe);
+        parsed.Get("q").ShouldBe("2+2=4");
     }
 
     [Fact]
@@ -398,10 +399,10 @@ public sealed class HandEncoderTests
     {
         string encoded = HandEncoder.Batch(5, ("status", "ok"));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Batch);
-        parsed.GetInt("count").Should().Be(5);
-        parsed.Get("status").Should().Be("ok");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Batch);
+        parsed.GetInt("count").ShouldBe(5);
+        parsed.Get("status").ShouldBe("ok");
     }
 
     [Fact]
@@ -411,8 +412,8 @@ public sealed class HandEncoderTests
         string[] docs = ["doc content with | pipe", "another|pipe|doc"];
         string encoded = HandEncoder.BatchWithDocuments(taskTypes, docs);
         IReadOnlyList<ParsedHandMessage> batch = HandParser.ParseBatch(encoded);
-        batch.Should().HaveCount(1);
-        batch[0].Get("t").Should().Contain("extract");
+        batch.Count.ShouldBe(1);
+        batch[0].Get("t")!.ShouldContain("extract");
     }
 
     [Fact]
@@ -432,8 +433,8 @@ public sealed class HandEncoderTests
         foreach ((string encoded, Performative expected) in cases)
         {
             ParsedHandMessage? parsed = HandParser.Parse(encoded);
-            parsed.Should().NotBeNull($"performative {expected} should round-trip");
-            parsed!.Performative.Should().Be(expected);
+            parsed.ShouldNotBeNull($"performative {expected} should round-trip");
+            parsed!.Performative.ShouldBe(expected);
         }
     }
 
@@ -442,8 +443,8 @@ public sealed class HandEncoderTests
     {
         string encoded = HandEncoder.Result(("V", "42"), ("C", "0.87"));
         ParsedHandMessage? parsed = HandParser.ParseLenient("Oto moja odpowiedz:\n" + encoded + "\nDziekuje");
-        parsed.Should().NotBeNull();
-        parsed!.Get("V").Should().Be("42");
+        parsed.ShouldNotBeNull();
+        parsed!.Get("V").ShouldBe("42");
     }
 
     [Theory]
@@ -456,7 +457,7 @@ public sealed class HandEncoderTests
     public void Parse_MalformedInput_DoesNotThrow(string input)
     {
         Action act = () => HandParser.Parse(input);
-        act.Should().NotThrow();
+        act.ShouldNotThrow();
     }
 
     [Fact]
@@ -466,7 +467,7 @@ public sealed class HandEncoderTests
         string[] documents = ["legitimate doc", "R|V=injected\nP|q=hacked"];
         string encoded = HandEncoder.BatchWithDocuments(taskTypes, documents);
         IReadOnlyList<ParsedHandMessage> batch = HandParser.ParseBatch(encoded);
-        batch.Should().HaveCount(1);
+        batch.Count.ShouldBe(1);
     }
 
     [Fact]
@@ -474,7 +475,7 @@ public sealed class HandEncoderTests
     {
         string oversized = "R|d=" + Convert.ToBase64String(new byte[500_000]);
         Action act = () => HandParser.Parse(oversized);
-        act.Should().NotThrow();
+        act.ShouldNotThrow();
     }
 
     [Fact]
@@ -483,8 +484,8 @@ public sealed class HandEncoderTests
         var taskTypes = new List<string> { "source" };
         var docs = new List<string> { "hello world" };
         var encoded = HandEncoder.BatchWithDocuments(taskTypes, docs, 1);
-        encoded.Should().Contain("B|");
-        encoded.Should().Contain("mx=1");
+        encoded.ShouldContain("B|");
+        encoded.ShouldContain("mx=1");
     }
 
     [Fact]
@@ -493,8 +494,8 @@ public sealed class HandEncoderTests
         var taskTypes = new List<string>();
         var docs = new List<string>();
         var encoded = HandEncoder.BatchWithDocuments(taskTypes, docs, 0);
-        encoded.Should().Contain("B|");
-        encoded.Should().Contain("mx=0");
+        encoded.ShouldContain("B|");
+        encoded.ShouldContain("mx=0");
     }
 
     [Fact]
@@ -502,9 +503,9 @@ public sealed class HandEncoderTests
     {
         string raw = "M|L=2|tx=classify\nR|V=ok\n";
         var results = HandParser.ParseBatch(raw);
-        results.Should().HaveCount(2);
-        results[0].Performative.Should().Be(Performative.Memo);
-        results[1].Performative.Should().Be(Performative.Result);
+        results.Count.ShouldBe(2);
+        results[0].Performative.ShouldBe(Performative.Memo);
+        results[1].Performative.ShouldBe(Performative.Result);
     }
 
     [Fact]
@@ -512,9 +513,9 @@ public sealed class HandEncoderTests
     {
         ParsedHandMessage? parsed = HandParser.Parse("R|V=first|V=second|C=0.9");
 
-        parsed.Should().NotBeNull();
-        parsed!.Get("V").Should().Be("first");
-        parsed.GetDouble("C").Should().BeApproximately(0.9, 0.0001);
+        parsed.ShouldNotBeNull();
+        parsed!.Get("V").ShouldBe("first");
+        parsed.GetDouble("C")!.Value.ShouldBe(0.9, 0.0001);
     }
 
     [Fact]
@@ -525,10 +526,10 @@ public sealed class HandEncoderTests
         string encoded = HandEncoder.Memo(("t", "search_results"), ("d", base64));
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
 
-        parsed.Should().NotBeNull();
+        parsed.ShouldNotBeNull();
         string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parsed!.Get("d")!));
-        decoded.Should().Contain("/src/Foo.cs");
-        decoded.Should().Contain("0.85");
+        decoded.ShouldContain("/src/Foo.cs");
+        decoded.ShouldContain("0.85");
     }
 }
 
@@ -544,7 +545,7 @@ public sealed class MemoBuilderTests
             .Field("tg", "urgent")
             .Build();
 
-        encoded.Should().Be("M|L=2|tx=classify|pr=high|tg=urgent");
+        encoded.ShouldBe("M|L=2|tx=classify|pr=high|tg=urgent");
     }
 
     [Fact]
@@ -556,7 +557,7 @@ public sealed class MemoBuilderTests
             .Field("prio", "low")
             .Build();
 
-        encoded.Should().Be("M|L=3|task=extract|prio=low");
+        encoded.ShouldBe("M|L=3|task=extract|prio=low");
     }
 
     [Fact]
@@ -568,7 +569,7 @@ public sealed class MemoBuilderTests
             .Field("priority", "high")
             .Build();
 
-        encoded.Should().Be("M|L=1|task_type=summarize|priority=high");
+        encoded.ShouldBe("M|L=1|task_type=summarize|priority=high");
     }
 
     [Fact]
@@ -581,10 +582,10 @@ public sealed class MemoBuilderTests
             .Build();
 
         ParsedHandMessage? parsed = HandParser.Parse(encoded);
-        parsed.Should().NotBeNull();
-        parsed!.Performative.Should().Be(Performative.Memo);
-        parsed.GetInt("L").Should().Be(2);
-        parsed.Get("task").Should().Be("classify");
-        parsed.Get("prio").Should().Be("high");
+        parsed.ShouldNotBeNull();
+        parsed!.Performative.ShouldBe(Performative.Memo);
+        parsed.GetInt("L").ShouldBe(2);
+        parsed.Get("task").ShouldBe("classify");
+        parsed.Get("prio").ShouldBe("high");
     }
 }

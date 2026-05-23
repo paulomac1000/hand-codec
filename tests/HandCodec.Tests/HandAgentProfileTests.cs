@@ -1,6 +1,6 @@
 using HandCodec.Models;
 using HandCodec.Parser;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace HandCodec.Tests;
@@ -14,7 +14,7 @@ public sealed class HandAgentProfileTests
     [InlineData(AgentClass.External, "")]
     public void Prefill_ReturnsExpected(AgentClass agentClass, string expected)
     {
-        HandAgentProfile.Prefill(agentClass).Should().Be(expected);
+        HandAgentProfile.Prefill(agentClass).ShouldBe(expected);
     }
 
     [Theory]
@@ -24,7 +24,7 @@ public sealed class HandAgentProfileTests
     [InlineData(AgentClass.External, CompressionTier.Debug)]
     public void TierFor_ReturnsExpected(AgentClass agentClass, CompressionTier expected)
     {
-        HandAgentProfile.TierFor(agentClass).Should().Be(expected);
+        HandAgentProfile.TierFor(agentClass).ShouldBe(expected);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class HandAgentProfileTests
         foreach (AgentClass cls in Enum.GetValues<AgentClass>())
         {
             Action act = () => HandAgentProfile.Prefill(cls);
-            act.Should().NotThrow();
+            act.ShouldNotThrow();
         }
     }
 }
@@ -44,23 +44,23 @@ public sealed class ParsedHandMessageGetDoubleOrTests
     public void GetDoubleOr_KeyPresentAndNumeric_ReturnsValue()
     {
         ParsedHandMessage? msg = HandParser.Parse("R|V=hi|C=0.94");
-        msg.Should().NotBeNull();
-        msg!.GetDoubleOr("C", 0.5).Should().Be(0.94);
+        msg.ShouldNotBeNull();
+        msg!.GetDoubleOr("C", 0.5).ShouldBe(0.94);
     }
 
     [Fact]
     public void GetDoubleOr_KeyAbsent_ReturnsFallback()
     {
         ParsedHandMessage? msg = HandParser.Parse("R|V=hi");
-        msg.Should().NotBeNull();
-        msg!.GetDoubleOr("C", 0.5).Should().Be(0.5);
+        msg.ShouldNotBeNull();
+        msg!.GetDoubleOr("C", 0.5).ShouldBe(0.5);
     }
 
     [Fact]
     public void GetDoubleOr_KeyPresentButNonNumeric_ReturnsFallback()
     {
         ParsedHandMessage? msg = HandParser.Parse("R|V=hi|C=high");
-        msg.Should().NotBeNull();
-        msg!.GetDoubleOr("C", 0.5).Should().Be(0.5);
+        msg.ShouldNotBeNull();
+        msg!.GetDoubleOr("C", 0.5).ShouldBe(0.5);
     }
 }

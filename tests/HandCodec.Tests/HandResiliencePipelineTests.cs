@@ -1,6 +1,6 @@
 using HandCodec.Models;
 using HandCodec.Parser;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace HandCodec.Tests;
@@ -11,8 +11,8 @@ public sealed class HandResiliencePipelineTests
     public void Parse_CleanHand_ReturnsLevel1()
     {
         var r = HandResiliencePipeline.Parse("R|V=56|C=0.9");
-        r.Level.Should().Be(1);
-        r.Message.IsUnstructured.Should().BeFalse();
+        r.Level.ShouldBe(1);
+        r.Message.IsUnstructured.ShouldBeFalse();
     }
 
     [Theory]
@@ -21,7 +21,7 @@ public sealed class HandResiliencePipelineTests
     public void Parse_WithPreamble_ReturnsLevel2(string input)
     {
         var r = HandResiliencePipeline.Parse(input);
-        r.Level.Should().Be(2);
+        r.Level.ShouldBe(2);
     }
 
     [Theory]
@@ -32,9 +32,9 @@ public sealed class HandResiliencePipelineTests
     {
         var opts = new HandResilientOptions(EnableMarkdownStrip: true, EnableSemanticExtraction: false);
         var r = HandResiliencePipeline.Parse(input, opts);
-        r.Level.Should().BeLessThanOrEqualTo(3, "markdown-wrapped HAND should be recovered at L1–L3");
-        r.Message.IsUnstructured.Should().BeFalse();
-        r.Message.Get("V").Should().Be("56");
+        r.Level.ShouldBeLessThanOrEqualTo(3);
+        r.Message.IsUnstructured.ShouldBeFalse();
+        r.Message.Get("V").ShouldBe("56");
     }
 
     [Theory]
@@ -44,8 +44,8 @@ public sealed class HandResiliencePipelineTests
     {
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(input, opts);
-        r.Level.Should().Be(4);
-        r.Message.IsUnstructured.Should().BeFalse();
+        r.Level.ShouldBe(4);
+        r.Message.IsUnstructured.ShouldBeFalse();
     }
 
     [Theory]
@@ -54,9 +54,9 @@ public sealed class HandResiliencePipelineTests
     public void Parse_Unrecoverable_ReturnsLevel5_NeverNull(string input)
     {
         var r = HandResiliencePipeline.Parse(input, HandResilientOptions.AllEnabled);
-        r.Level.Should().Be(5);
-        r.Message.Should().NotBeNull();
-        r.Message.IsUnstructured.Should().BeTrue();
+        r.Level.ShouldBe(5);
+        r.Message.ShouldNotBeNull();
+        r.Message.IsUnstructured.ShouldBeTrue();
     }
 
     [Fact]
@@ -65,9 +65,9 @@ public sealed class HandResiliencePipelineTests
         var opts = new HandResilientOptions(EnableMarkdownStrip: false, EnableSemanticExtraction: false);
         const string input = "This is a plain text response with no structure at all.";
         var r = HandResiliencePipeline.Parse(input, opts);
-        r.Level.Should().Be(5);
-        r.Message.IsUnstructured.Should().BeTrue();
-        r.Message.RawMessage.Should().Be(input);
+        r.Level.ShouldBe(5);
+        r.Message.IsUnstructured.ShouldBeTrue();
+        r.Message.RawMessage.ShouldBe(input);
     }
 
     [Fact]
@@ -82,11 +82,11 @@ public sealed class HandResiliencePipelineTests
         foreach ((string input, Func<ParsedHandMessage, string> reEncode) in cases)
         {
             var r = HandResiliencePipeline.Parse(input);
-            r.Level.Should().Be(1);
+            r.Level.ShouldBe(1);
             string reEncoded = reEncode(r.Message);
             ParsedHandMessage? rt = HandParser.Parse(reEncoded);
-            rt.Should().NotBeNull();
-            rt!.Performative.Should().Be(r.Message.Performative,
+            rt.ShouldNotBeNull();
+            rt!.Performative.ShouldBe(r.Message.Performative,
                 $"round-trip must preserve performative for '{input}'");
         }
     }
@@ -103,7 +103,7 @@ public sealed class HandResiliencePipelineTests
             totalMs += r.ElapsedMs;
         }
         double avgMs = totalMs / 100.0;
-        avgMs.Should().BeLessThan(5.0, "full-ladder worst-case parse should average under 5ms over 100 calls");
+        avgMs.ShouldBeLessThan(5.0);
     }
 
     [Fact]
@@ -113,11 +113,11 @@ public sealed class HandResiliencePipelineTests
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
-        r.Level.Should().Be(4);
-        r.Message.Performative.Should().Be(Performative.Memo);
-        r.Message.Get("task_type").Should().Be("classify");
-        r.Message.Get("priority").Should().Be("high");
-        r.Message.Get("status").Should().Be("ok");
+        r.Level.ShouldBe(4);
+        r.Message.Performative.ShouldBe(Performative.Memo);
+        r.Message.Get("task_type").ShouldBe("classify");
+        r.Message.Get("priority").ShouldBe("high");
+        r.Message.Get("status").ShouldBe("ok");
     }
 
     [Fact]
@@ -132,14 +132,14 @@ public sealed class HandResiliencePipelineTests
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
-        r.Level.Should().Be(4);
-        r.Message.Performative.Should().Be(Performative.Memo);
-        r.Message.Get("task_type").Should().Be("extract_entities");
-        r.Message.Get("priority").Should().Be("high");
-        r.Message.Get("source_layer").Should().Be("L1");
-        r.Message.Get("target_layer").Should().Be("L2");
-        r.Message.Get("tags").Should().Be("urgent, verified");
-        r.Message.Get("status").Should().Be("pending");
+        r.Level.ShouldBe(4);
+        r.Message.Performative.ShouldBe(Performative.Memo);
+        r.Message.Get("task_type").ShouldBe("extract_entities");
+        r.Message.Get("priority").ShouldBe("high");
+        r.Message.Get("source_layer").ShouldBe("L1");
+        r.Message.Get("target_layer").ShouldBe("L2");
+        r.Message.Get("tags").ShouldBe("urgent, verified");
+        r.Message.Get("status").ShouldBe("pending");
     }
 
     [Fact]
@@ -149,10 +149,10 @@ public sealed class HandResiliencePipelineTests
         var opts = HandResilientOptions.AllEnabled;
         var r = HandResiliencePipeline.Parse(raw, opts);
 
-        r.Level.Should().Be(4);
-        r.Message.Performative.Should().Be(Performative.Result,
+        r.Level.ShouldBe(4);
+        r.Message.Performative.ShouldBe(Performative.Result,
             "when confidence+value keywords are found, Result takes priority over Memo");
-        r.Message.GetDouble("C").Should().BeApproximately(0.95, 0.001);
+        r.Message.GetDouble("C")!.Value.ShouldBe(0.95, 0.001);
     }
 
     // ─── Per-level method tests ─────────────────────────────────────────
@@ -161,82 +161,82 @@ public sealed class HandResiliencePipelineTests
     public void ParseStrict_ValidHand_ReturnsParsedMessage()
     {
         var msg = HandResiliencePipeline.ParseStrict("R|V=56|C=0.9");
-        msg.IsUnstructured.Should().BeFalse();
-        msg.Get("V").Should().Be("56");
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("V").ShouldBe("56");
     }
 
     [Fact]
     public void ParseStrict_InvalidHand_ReturnsUnstructured()
     {
         var msg = HandResiliencePipeline.ParseStrict("garbage text");
-        msg.IsUnstructured.Should().BeTrue();
+        msg.IsUnstructured.ShouldBeTrue();
     }
 
     [Fact]
     public void ParseStrict_NeverReturnsNull()
     {
         var msg = HandResiliencePipeline.ParseStrict("");
-        msg.Should().NotBeNull();
+        msg.ShouldNotBeNull();
     }
 
     [Fact]
     public void ParseLenient_FindsMessageInPreamble()
     {
         var msg = HandResiliencePipeline.ParseLenient("preamble\nR|V=42|C=0.88\ntrailing");
-        msg.IsUnstructured.Should().BeFalse();
-        msg.Get("V").Should().Be("42");
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("V").ShouldBe("42");
     }
 
     [Fact]
     public void ParseLenient_NoMessage_ReturnsUnstructured()
     {
         var msg = HandResiliencePipeline.ParseLenient("no performative here");
-        msg.IsUnstructured.Should().BeTrue();
+        msg.IsUnstructured.ShouldBeTrue();
     }
 
     [Fact]
     public void ParseLenient_NeverReturnsNull()
     {
         var msg = HandResiliencePipeline.ParseLenient("");
-        msg.Should().NotBeNull();
+        msg.ShouldNotBeNull();
     }
 
     [Fact]
     public void ParseWithMarkdownStrip_StripsFences_ReturnsParsed()
     {
         var msg = HandResiliencePipeline.ParseWithMarkdownStrip("```\nR|V=56|C=0.9\n```");
-        msg.IsUnstructured.Should().BeFalse();
-        msg.Get("V").Should().Be("56");
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("V").ShouldBe("56");
     }
 
     [Fact]
     public void ParseWithMarkdownStrip_NoFences_ReturnsUnstructured()
     {
         var msg = HandResiliencePipeline.ParseWithMarkdownStrip("plain text without fences");
-        msg.IsUnstructured.Should().BeTrue();
+        msg.IsUnstructured.ShouldBeTrue();
     }
 
     [Fact]
     public void ParseWithMarkdownStrip_NeverReturnsNull()
     {
         var msg = HandResiliencePipeline.ParseWithMarkdownStrip("");
-        msg.Should().NotBeNull();
+        msg.ShouldNotBeNull();
     }
 
     [Fact]
     public void ParseSemantic_ExtractsKeyValuePairs()
     {
         var msg = HandResiliencePipeline.ParseSemantic("Task type: summarize\nPriority: low\nSource: agent-alpha");
-        msg.IsUnstructured.Should().BeFalse();
-        msg.Get("task_type").Should().Be("summarize");
-        msg.Get("priority").Should().Be("low");
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("task_type").ShouldBe("summarize");
+        msg.Get("priority").ShouldBe("low");
     }
 
     [Fact]
     public void ParseSemantic_NoPattern_ReturnsUnstructured()
     {
         var msg = HandResiliencePipeline.ParseSemantic("this is just a sentence");
-        msg.IsUnstructured.Should().BeTrue();
+        msg.IsUnstructured.ShouldBeTrue();
     }
 
     [Fact]
@@ -245,53 +245,53 @@ public sealed class HandResiliencePipelineTests
         const string raw = "Request ID: req-12345\nComponent: auth-service\nAction: restart\nTimeout ms: 5000";
         var msg = HandResiliencePipeline.ParseSemantic(raw);
 
-        msg.IsUnstructured.Should().BeFalse();
+        msg.IsUnstructured.ShouldBeFalse();
         // Keys are normalised: spaces → underscores, lowercased
-        msg.Get("request_id").Should().Be("req-12345");
-        msg.Get("component").Should().Be("auth-service");
-        msg.Get("action").Should().Be("restart");
-        msg.Get("timeout_ms").Should().Be("5000");
+        msg.Get("request_id").ShouldBe("req-12345");
+        msg.Get("component").ShouldBe("auth-service");
+        msg.Get("action").ShouldBe("restart");
+        msg.Get("timeout_ms").ShouldBe("5000");
     }
 
     [Fact]
     public void ParseSemantic_ExtractsEqualsSeparatedKeys()
     {
         var msg = HandResiliencePipeline.ParseSemantic("status=ok\nerror_count=0\nlast_check=2024-01-01");
-        msg.IsUnstructured.Should().BeFalse();
-        msg.Get("status").Should().Be("ok");
-        msg.Get("error_count").Should().Be("0");
-        msg.Get("last_check").Should().Be("2024-01-01");
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("status").ShouldBe("ok");
+        msg.Get("error_count").ShouldBe("0");
+        msg.Get("last_check").ShouldBe("2024-01-01");
     }
 
     [Fact]
     public void ParseSemantic_NeverReturnsNull()
     {
         var msg = HandResiliencePipeline.ParseSemantic("");
-        msg.Should().NotBeNull();
+        msg.ShouldNotBeNull();
     }
 
     [Fact]
     public void TryExtractGenericKeyValues_EmptyString_ReturnsNull()
     {
         var result = HandResiliencePipeline.TryExtractGenericKeyValues("");
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact]
     public void TryExtractGenericKeyValues_NormalisesSpacesToUnderscores()
     {
         var result = HandResiliencePipeline.TryExtractGenericKeyValues("My Custom Field: some value");
-        result.Should().NotBeNull();
-        result!.Should().ContainKey("my_custom_field");
-        result!["my_custom_field"].Should().Be("some value");
+        result.ShouldNotBeNull();
+        result!.ShouldContainKey("my_custom_field");
+        result!["my_custom_field"].ShouldBe("some value");
     }
 
     [Fact]
     public void TryExtractGenericKeyValues_DeduplicatesByFirstOccurrence()
     {
         var result = HandResiliencePipeline.TryExtractGenericKeyValues("status: first\nstatus: second");
-        result.Should().NotBeNull();
-        result!["status"].Should().Be("first");
+        result.ShouldNotBeNull();
+        result!["status"].ShouldBe("first");
     }
 }
 
@@ -301,7 +301,7 @@ public sealed class AgentClassTests
     public void AgentClass_HasExactly4Values()
     {
         var values = Enum.GetValues<AgentClass>();
-        values.Should().HaveCount(4);
+        values.Length.ShouldBe(4);
     }
 
     private static readonly string[] ExpectedClasses = ["Native", "Assisted", "Reasoning", "External"];
@@ -309,6 +309,6 @@ public sealed class AgentClassTests
     [Fact]
     public void AgentClass_ContainsExpectedValues()
     {
-        Enum.GetNames<AgentClass>().Should().BeEquivalentTo(ExpectedClasses);
+        Enum.GetNames<AgentClass>().ShouldBe(ExpectedClasses);
     }
 }
