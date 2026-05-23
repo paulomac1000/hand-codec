@@ -2,7 +2,7 @@ language: "dotnet"
 project: "hand-codec"
 package: "HandCodec"
 src_dir: "src/"
-dotnet_version: "8.0.x"
+dotnet_version: "10.0.x"
 dotnet_solution: "HandCodec.sln"
 use_docker: false
 is_mcp: false
