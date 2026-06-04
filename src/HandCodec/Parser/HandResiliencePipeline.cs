@@ -54,7 +54,7 @@ public static partial class HandResiliencePipeline
 
     // Generic key:value pattern for any domain — extracts "Word Phrase: value" or "word=value" from prose.
     // Handles optional list bullets (-, *, •) and bold wrappers (**).
-    [GeneratedRegex(@"^(?:[-*•]\s*)?(?:\*\*)?(\w[\w\s]*?)(?:\*\*)?\s*[:=]\s*(.+?)$", RegexOptions.Compiled | RegexOptions.Multiline)]
+    [GeneratedRegex(@"^(?:[-*•]\s*)?(?:\*\*)?(\w[\w\s]*?)(?:\*\*)?\s*[:=]\s*(.+?)$", RegexOptions.Multiline)]
     private static partial Regex GenericKeyValueRegex();
 
     [GeneratedRegex(@"\s+")]

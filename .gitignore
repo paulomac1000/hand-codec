@@ -47,4 +47,5 @@ semgrep.sarif
 
 # SonarQube scanner
 .sonarqube/
+# Local dev tool — generated externally, not part of distributed library
 scripts/sonar-check.sh

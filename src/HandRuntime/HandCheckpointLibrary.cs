@@ -22,8 +22,10 @@ public static class HandCheckpointLibrary
     });
 
     /// <summary>
-    /// Priming for Memo (M|) performative — H.A.N.D. Compact key scheme.
-    /// Uses two-character compact keys (e7, s9) learned through implicit priming.
+    /// Priming for Memo (M|) performative.
+    /// Uses checkpoint-specific priming aliases (e7, s9) intentionally distinct from
+    /// <see cref="HandCodec.Models.CompressionTier"/> single-letter compact keys, to avoid
+    /// confusion with real domain data. The parser reads keys as arbitrary strings up to '='.
     /// One exchange teaches the wire pattern; domain checkpoints provide diverse examples.
     /// </summary>
     public static HandCheckpoint MemoPing { get; } = new(new[]

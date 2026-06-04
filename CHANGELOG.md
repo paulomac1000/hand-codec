@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Narrative Blockquote Stripping**: Parser body extraction (`ExtractBody`) now strips leading markdown blockquote characters (`>`) and matching spaces.
 
 ### Fixed
-- **Code Coverage & Quality**: Reached 100% code coverage on all core execution paths of the parser, encoder, record model, and resilience pipeline. Cleaned up redundant defensive checks.
+- **Code Coverage & Quality**: 100% coverage on core parser, encoder, record model, and resilience pipeline execution paths (89.2% overall per SonarQube). Cleaned up redundant defensive checks.
 - **ParsePayload Cognitive Complexity**: Refactored the manual character scanner (`TryConsumeEscape`, `ScanUntil`) to reduce cognitive complexity from 49 to <15 (SonarQube S3776).
 - **TryExtractJson Decomposition**: Split monolithic JSON extraction into `TryParseJsonBlock`, `BuildJsonPayload`, `ConvertJsonValue`, `ClassifyJsonPayload` — cognitive complexity from 25 to <15 (SonarQube S3776).
 - **NormaliseKey SourceGen**: Replaced `Regex.Replace` with `[GeneratedRegex] WhitespaceRegex()` to resolve SYSLIB1045.

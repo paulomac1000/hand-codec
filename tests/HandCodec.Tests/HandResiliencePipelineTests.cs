@@ -519,7 +519,7 @@ public sealed class HandResiliencePipelineTests
         var stagesField = typeof(HandResiliencePipeline).GetField("_stages", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         stagesField.ShouldNotBeNull();
         var stages = (IHandParsingStage[])stagesField.GetValue(null)!;
-        var markdownStripStage = stages[2]; // MarkdownStripStage
+        var markdownStripStage = stages.First(s => s.Name == "markdown_strip");
         var result = markdownStripStage.Execute("```\nR|V=inside_fence\n```", HandResilientOptions.AllEnabled);
         result.ShouldNotBeNull();
         result.Get("V").ShouldBe("inside_fence");
