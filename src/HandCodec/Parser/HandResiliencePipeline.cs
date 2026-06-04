@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using HandCodec.Models;
 
@@ -9,13 +10,14 @@ namespace HandCodec.Parser;
 public sealed record HandResilientOptions(
     bool EnableMarkdownStrip = true,
     bool EnableSemanticExtraction = false,
+    bool EnableJsonExtraction = false,
     Func<string, bool>? CrisisDetector = null)
 {
-    /// <summary>Default: markdown strip ON, semantic extraction OFF.</summary>
+    /// <summary>Default: markdown strip ON, semantic extraction OFF, JSON extraction OFF.</summary>
     public static HandResilientOptions Default { get; } = new();
 
     /// <summary>All optional stages enabled.</summary>
-    public static HandResilientOptions AllEnabled { get; } = new(EnableMarkdownStrip: true, EnableSemanticExtraction: true);
+    public static HandResilientOptions AllEnabled { get; } = new(EnableMarkdownStrip: true, EnableSemanticExtraction: true, EnableJsonExtraction: true);
 }
 
 /// <summary>Result of running the HandResiliencePipeline.</summary>
@@ -29,9 +31,9 @@ public interface IHandParsingStage
 }
 
 /// <summary>
-/// 5-level degradation ladder for parsing model outputs.
+/// 6-level degradation ladder for parsing model outputs.
 /// Level 1 = strict, Level 2 = lenient scan, Level 3 = markdown strip,
-/// Level 4 = semantic extraction, Level 5 = passthrough (unstructured).
+/// Level 4 = semantic extraction, Level 5 = JSON extraction, Level 6 = passthrough (unstructured).
 /// </summary>
 public static partial class HandResiliencePipeline
 {
@@ -41,6 +43,7 @@ public static partial class HandResiliencePipeline
         new LenientParseStage(),
         new MarkdownStripStage(),
         new SemanticExtractionStage(),
+        new JsonExtractionStage(),
     ];
 
     [GeneratedRegex(@"(?:confidence|conf|certainty)\s*[:=]\s*(0?\.\d+|1\.0|1)", RegexOptions.IgnoreCase)]
@@ -50,8 +53,12 @@ public static partial class HandResiliencePipeline
     private static partial Regex ValueRegex();
 
     // Generic key:value pattern for any domain — extracts "Word Phrase: value" or "word=value" from prose.
-    [GeneratedRegex(@"^(\w[\w\s]*?)\s*[:=]\s*(.+?)$", RegexOptions.Compiled | RegexOptions.Multiline)]
+    // Handles optional list bullets (-, *, •) and bold wrappers (**).
+    [GeneratedRegex(@"^(?:[-*•]\s*)?(?:\*\*)?(\w[\w\s]*?)(?:\*\*)?\s*[:=]\s*(.+?)$", RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex GenericKeyValueRegex();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRegex();
 
     // ─── Full-ladder convenience ────────────────────────────────────────────
 
@@ -133,6 +140,16 @@ public static partial class HandResiliencePipeline
         return TryExtractSemantics(rawOutput, null) ?? ParsedHandMessage.Unstructured(rawOutput);
     }
 
+    /// <summary>
+    /// JSON extraction from free-form text (Level 5). Extracts key-value pairs from the first
+    /// flat JSON block in the raw output.
+    /// Returns <see cref="ParsedHandMessage.Unstructured"/> on failure. Never returns null.
+    /// </summary>
+    public static ParsedHandMessage ParseJson(string rawOutput)
+    {
+        return TryExtractJson(rawOutput) ?? ParsedHandMessage.Unstructured(rawOutput);
+    }
+
     // ─── Internal helpers ───────────────────────────────────────────────────
 
     private static bool IsStageEnabled(string name, HandResilientOptions opts) => name switch
@@ -140,6 +157,7 @@ public static partial class HandResiliencePipeline
         "strict" or "lenient" => true,
         "markdown_strip" => opts.EnableMarkdownStrip,
         "semantic" => opts.EnableSemanticExtraction,
+        "json_extraction" => opts.EnableJsonExtraction,
         _ => true,
     };
 
@@ -173,6 +191,12 @@ public static partial class HandResiliencePipeline
         public ParsedHandMessage? Execute(string raw, HandResilientOptions opts) => TryExtractSemantics(raw, opts.CrisisDetector);
     }
 
+    private sealed class JsonExtractionStage : IHandParsingStage
+    {
+        public string Name => "json_extraction";
+        public ParsedHandMessage? Execute(string raw, HandResilientOptions opts) => TryExtractJson(raw);
+    }
+
     internal static string StripMarkdownFences(string raw)
     {
         ReadOnlySpan<char> span = raw.AsSpan();
@@ -188,8 +212,10 @@ public static partial class HandResiliencePipeline
             ReadOnlySpan<char> t = line.TrimStart();
             if (t.StartsWith("```", StringComparison.Ordinal) || t.StartsWith("~~~", StringComparison.Ordinal))
             {
-                if (!firstFenceSeen) { firstFenceSeen = true; continue; }
-                break;
+                if (firstFenceSeen)
+                    break;
+                firstFenceSeen = true;
+                continue;
             }
             while (t.StartsWith(">", StringComparison.Ordinal) || t.StartsWith(" ", StringComparison.Ordinal))
                 t = t.Slice(1);
@@ -223,7 +249,8 @@ public static partial class HandResiliencePipeline
         var memoPayload = TryExtractGenericKeyValues(raw);
         if (memoPayload is not null && memoPayload.Count > 0)
         {
-            memoPayload["L"] = "2";
+            if (!memoPayload.ContainsKey("L"))
+                memoPayload["L"] = "2";
             return new ParsedHandMessage(Performative.Memo, raw, memoPayload, raw);
         }
 
@@ -253,9 +280,6 @@ public static partial class HandResiliencePipeline
             string key = NormaliseKey(m.Groups[1].Value);
             string value = m.Groups[2].Value.Trim();
 
-            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
-                continue;
-
             if (!payload.ContainsKey(key))
                 payload[key] = value;
         }
@@ -267,9 +291,84 @@ public static partial class HandResiliencePipeline
     {
         // Lowercase and replace whitespace with underscore: "Task Type" → "task_type"
 #pragma warning disable CA1308 // Normalize to lowercase for dictionary keys, not for comparison
-        return Regex.Unescape(
-            System.Text.RegularExpressions.Regex.Replace(
-                rawKey.Trim().ToLowerInvariant(), @"\s+", "_"));
+        return WhitespaceRegex().Replace(
+            rawKey.Trim().ToLowerInvariant(), "_");
 #pragma warning restore CA1308
+    }
+
+    internal static ParsedHandMessage? TryExtractJson(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        using var doc = TryParseJsonBlock(raw);
+        if (doc is null)
+            return null;
+
+        var payload = BuildJsonPayload(doc.RootElement);
+        if (payload.Count == 0)
+            return null;
+
+        return ClassifyJsonPayload(payload, raw);
+    }
+
+    private static JsonDocument? TryParseJsonBlock(string raw)
+    {
+#pragma warning disable CA1307
+        int start = raw.IndexOf('{');
+        int end = raw.LastIndexOf('}');
+#pragma warning restore CA1307
+        if (start < 0 || end < 0 || end <= start)
+            return null;
+
+        try
+        {
+            return JsonDocument.Parse(raw.Substring(start, end - start + 1));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static Dictionary<string, string> BuildJsonPayload(JsonElement root)
+    {
+        var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonProperty prop in root.EnumerateObject())
+        {
+            string key = NormaliseKey(prop.Name);
+            if (string.IsNullOrWhiteSpace(key))
+                continue;
+
+            payload[key] = ConvertJsonValue(prop.Value);
+        }
+        return payload;
+    }
+
+    private static string ConvertJsonValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString() ?? string.Empty,
+        JsonValueKind.Number => value.GetRawText(),
+        JsonValueKind.True => "true",
+        JsonValueKind.False => "false",
+        JsonValueKind.Null => string.Empty,
+        _ => value.GetRawText()
+    };
+
+    private static ParsedHandMessage ClassifyJsonPayload(Dictionary<string, string> payload, string raw)
+    {
+        bool hasConfidence = payload.TryGetValue("c", out var cVal) || payload.TryGetValue("confidence", out cVal);
+        bool hasValue = payload.TryGetValue("v", out var vVal) || payload.TryGetValue("value", out vVal);
+
+        if (hasConfidence && hasValue)
+        {
+            if (!payload.ContainsKey("C") && cVal is not null) payload["C"] = cVal;
+            if (!payload.ContainsKey("V") && vVal is not null) payload["V"] = vVal;
+            return new ParsedHandMessage(Performative.Result, raw, payload, raw);
+        }
+
+        if (!payload.ContainsKey("L"))
+            payload["L"] = "2";
+        return new ParsedHandMessage(Performative.Memo, raw, payload, raw);
     }
 }

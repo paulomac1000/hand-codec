@@ -22,14 +22,13 @@ public static class HandCheckpointLibrary
     });
 
     /// <summary>
-    /// Priming for Memo (M|) performative.
-    /// One exchange: "[SYSTEM_PROTOCOL_PING]" → "M|L=2|em=none|sv=low|note=ack"
-    /// Memo fields use non-therapeutic values so the model never confuses
-    /// protocol examples with real data.
+    /// Priming for Memo (M|) performative — H.A.N.D. Compact key scheme.
+    /// Uses two-character compact keys (e7, s9) learned through implicit priming.
+    /// One exchange teaches the wire pattern; domain checkpoints provide diverse examples.
     /// </summary>
     public static HandCheckpoint MemoPing { get; } = new(new[]
     {
         new HandExchange("[SYSTEM_PROTOCOL_PING]",
-            "M|L=2|em=none|sv=low|note=ack"),
+            "M|L=2|e7=none|s9=low|note=ack"),
     });
 }

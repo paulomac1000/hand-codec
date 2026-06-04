@@ -44,3 +44,7 @@ appsettings.Development.json
 # CI artifacts
 coverage-report/
 semgrep.sarif
+
+# SonarQube scanner
+.sonarqube/
+scripts/sonar-check.sh

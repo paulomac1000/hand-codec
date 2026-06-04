@@ -112,6 +112,24 @@ public static class HandEncoder
     public static string Memo(params (string Key, string Value)[] fields) =>
         Encode(Performative.Memo, fields);
 
+    private static string Escape(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var sb = new StringBuilder(input.Length);
+        for (int i = 0; i < input.Length; i++)
+        {
+            char c = input[i];
+            if (c == '\\' || c == '|' || c == '=')
+            {
+                sb.Append('\\');
+            }
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
     private static string Encode(Performative performative, params (string Key, string Value)[] payload)
     {
         string prefix = performative switch
@@ -127,7 +145,7 @@ public static class HandEncoder
             _ => throw new ArgumentException($"Unknown performative: {performative}", nameof(performative)),
         };
 
-        string payloadStr = string.Join("|", payload.Select(p => $"{p.Key}={p.Value}"));
+        string payloadStr = string.Join("|", payload.Select(p => $"{Escape(p.Key)}={Escape(p.Value)}"));
         return $"{prefix}|{payloadStr}";
     }
 }
