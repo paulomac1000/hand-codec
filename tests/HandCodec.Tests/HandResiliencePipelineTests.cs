@@ -420,6 +420,34 @@ public sealed class HandResiliencePipelineTests
         invalid.IsUnstructured.ShouldBeTrue();
     }
 
+    [Fact]
+    public void ParseJson_TwoObjects_ExtractsFirstOnly()
+    {
+        const string raw = "{\"a\": \"first\"} trailing text {\"b\": \"second\"}";
+        var msg = HandResiliencePipeline.ParseJson(raw);
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("a").ShouldBe("first");
+        msg.Get("b").ShouldBeNull();
+    }
+
+    [Fact]
+    public void ParseJson_BraceInString_ParsesCorrectly()
+    {
+        const string raw = "{\"key\": \"val}\"}";
+        var msg = HandResiliencePipeline.ParseJson(raw);
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("key").ShouldBe("val}");
+    }
+
+    [Fact]
+    public void ParseJson_NestedBraces_ParsesCorrectly()
+    {
+        const string raw = "{\"outer\": {\"inner\": 1}}";
+        var msg = HandResiliencePipeline.ParseJson(raw);
+        msg.IsUnstructured.ShouldBeFalse();
+        msg.Get("outer")!.ShouldContain("inner");
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

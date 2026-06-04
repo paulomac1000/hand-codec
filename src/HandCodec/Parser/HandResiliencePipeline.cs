@@ -315,20 +315,69 @@ public static partial class HandResiliencePipeline
     private static JsonDocument? TryParseJsonBlock(string raw)
     {
 #pragma warning disable CA1307
-        int start = raw.IndexOf('{');
-        int end = raw.LastIndexOf('}');
+        for (int start = raw.IndexOf('{'); start >= 0; start = raw.IndexOf('{', start + 1))
 #pragma warning restore CA1307
-        if (start < 0 || end < 0 || end <= start)
-            return null;
+        {
+            int? end = FindMatchingBrace(raw, start);
+            if (end is null)
+                continue;
 
-        try
-        {
-            return JsonDocument.Parse(raw.Substring(start, end - start + 1));
+            try
+            {
+                return JsonDocument.Parse(raw.Substring(start, end.Value - start + 1));
+            }
+            catch (JsonException)
+            {
+                // Not valid JSON — try next brace pair
+            }
         }
-        catch (JsonException)
+
+        return null;
+    }
+
+    private static void ProcessInString(char ch, ref bool escaped, ref bool inString)
+    {
+        if (escaped)
         {
-            return null;
+            escaped = false;
+            return;
         }
+
+        if (ch == '\\')
+        {
+            escaped = true;
+            return;
+        }
+
+        if (ch == '"')
+            inString = false;
+    }
+
+    private static int? FindMatchingBrace(string raw, int start)
+    {
+        int depth = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        for (int i = start; i < raw.Length; i++)
+        {
+            char ch = raw[i];
+
+            if (inString)
+            {
+                ProcessInString(ch, ref escaped, ref inString);
+                continue;
+            }
+
+            if (ch == '"')
+                inString = true;
+            else if (ch == '{')
+                depth++;
+            else if (ch == '}' && --depth == 0)
+                return i;
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string> BuildJsonPayload(JsonElement root)
