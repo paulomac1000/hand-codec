@@ -118,7 +118,7 @@ The wire format grammar defines keys as `1*( ALPHA | DIGIT | "_" )`. That is the
 
 - **No key registry** — unlike Protocol Buffers or gRPC, there is no `.proto` file declaring valid field names.
 - **No schema validation** — the parser never rejects a key because it "doesn't belong" to a performative.
-- **No semantic layer** — the codec doesn't know or care what `tx` or `e7` means. It just parses `key=value` pairs.
+- **No semantic layer** — the codec doesn't know or care what `tx` or `e7` means. It parses `key=value` pairs.
 
 This design choice enables the Codec G experiment (see [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist)): keys are deliberately meaningless two-character strings (`e7`, `s9`, `p3`, `k2`) with zero semantic content. A small local model (7B–8B) receives `M|` wire with these keys and no legend. It learns the *structural pattern* through implicit priming — a single example exchange in the conversation history — and reproduces the format with valid, correctly structured output.
 
