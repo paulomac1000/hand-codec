@@ -83,6 +83,39 @@ The fix is implicit modelling. The system prompt shows examples (`R|V=42|C=0.9`)
 
 This is enforced by **omission** in HandCodec — no part of this codec ever produces a system prompt with the protocol name.
 
+## Why implicit priming works — the prefill mechanism
+
+The orchestrator injects checkpoint exchanges into conversation history, then **prefills
+the assistant's response** with the performative token (`R|` or `M|`). The model, facing
+an already-begun message, continues the pattern it observed in the history. This is not
+magic — it exploits the transformer's fundamental operation: next-token prediction
+conditioned on context windows.
+
+Consider what the model receives at inference time:
+
+```
+# Injected into history:
+User:      [SYSTEM_PROTOCOL_PING]
+Assistant: M|L=2|e7=none|s9=low|note=ack
+
+# Real user message:
+User:      I've been feeling anxious for weeks...
+
+# Prefilled assistant turn:
+Assistant: M|
+```
+
+The model's attention heads see `M|L=2|e7=none|s9=low|note=ack` in the history and the
+partial `M|` at the current position. The highest-probability next tokens form
+`L=2|e7=anxiety|s9=moderate` — continuing the template it witnessed. No prompt
+engineering required. No format instructions consumed. The structure is learned from
+the conversation itself.
+
+This matches research on emergent communication (Lazaridou, DeepMind; Meta FAIR pidgin
+experiments): agents exposed to structured exchanges develop stable protocols without
+explicit negotiation. The difference is that H.A.N.D. shortcuts the emergent phase by
+providing the template directly through priming — avoiding hundreds of negotiation rounds.
+
 ## Why narrative split (line 1 = data, line 2+ = prose)
 
 Long-range attention degrades roughly as O(distance²) in standard transformer architectures (Vaswani et al., 2017). When the original protocol allowed prose inside `V=...`:
