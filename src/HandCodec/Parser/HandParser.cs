@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using HandCodec.Exceptions;
 using HandCodec.Models;
@@ -184,6 +185,7 @@ public static partial class HandParser
 
     /// <summary>
     /// Joins the lines after the wire line into the narrative body, excluding markdown fences.
+    /// Strips leading blockquote and space prefixes to align with StripMarkdownFences.
     /// </summary>
     private static string ExtractBody(string[] lines, int startIndex)
     {
@@ -193,28 +195,101 @@ public static partial class HandParser
         var collected = new List<string>(lines.Length - startIndex);
         for (int i = startIndex; i < lines.Length; i++)
         {
-            string trimmed = lines[i].TrimStart();
+            string line = lines[i];
+            string trimmed = line.TrimStart();
             if (trimmed.StartsWith("```", StringComparison.Ordinal)
                 || trimmed.StartsWith("~~~", StringComparison.Ordinal))
                 continue;
-            collected.Add(lines[i]);
+
+            // Strip blockquote '>' and space prefix
+            int sliceIndex = 0;
+            while (sliceIndex < trimmed.Length && (trimmed[sliceIndex] == '>' || trimmed[sliceIndex] == ' '))
+            {
+                sliceIndex++;
+            }
+            collected.Add(trimmed.Substring(sliceIndex));
         }
 
         return string.Join('\n', collected).Trim();
     }
 
+    private static bool TryConsumeEscape(string payload, ref int i, out char result)
+    {
+        if (payload[i] != '\\')
+        {
+            result = '\0';
+            return false;
+        }
+
+        if (i + 1 < payload.Length)
+        {
+            char next = payload[i + 1];
+            if (next == '\\' || next == '|' || next == '=')
+            {
+                result = next;
+                i += 2;
+                return true;
+            }
+        }
+
+        result = '\\';
+        i++;
+        return true;
+    }
+
+    /// <summary>
+    /// Scans characters, handling backslash escapes, until a terminator is found
+    /// or the string ends. Does NOT consume the terminator on match.
+    /// </summary>
+    private static char ScanUntil(string payload, ref int i, StringBuilder sb, char terminator1, char terminator2)
+    {
+        while (i < payload.Length)
+        {
+            if (TryConsumeEscape(payload, ref i, out char escaped))
+            {
+                sb.Append(escaped);
+                continue;
+            }
+
+            char c = payload[i];
+            if (c == terminator1 || c == terminator2)
+                return c;
+
+            sb.Append(c);
+            i++;
+        }
+
+        return '\0';
+    }
+
     private static Dictionary<string, string> ParsePayload(string payload)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrEmpty(payload))
+            return result;
 
-        foreach (string part in payload.Split('|'))
+        int i = 0;
+
+        while (i < payload.Length)
         {
-            string[] pieces = part.Split('=', 2);
-            string key = pieces[0].Trim();
-            if (string.IsNullOrWhiteSpace(key) || result.ContainsKey(key))
-                continue;
+            var keySb = new StringBuilder();
+            char stoppedAt = ScanUntil(payload, ref i, keySb, '=', '|');
 
-            result[key] = pieces.Length > 1 ? pieces[1].Trim() : string.Empty;
+            string val = string.Empty;
+            if (stoppedAt == '=')
+            {
+                i++; // consume '='
+                var valSb = new StringBuilder();
+                ScanUntil(payload, ref i, valSb, '|', '\0');
+                val = valSb.ToString().Trim();
+            }
+
+            string key = keySb.ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(key) && !result.ContainsKey(key))
+                result[key] = val;
+
+            if (i < payload.Length && payload[i] == '|')
+                i++;
         }
 
         return result;

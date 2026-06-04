@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-04
+
+### Added
+- **JSON Resilience Stage (`Level 5`)**: Opt-in parsing stage that extracts key-value fields from flat JSON blocks inside noisy LLM outputs. Controlled via `HandResilientOptions.EnableJsonExtraction`.
+- **Character Escaping**: Backslash-based escaping for delimiters (`|`, `=`, `\`) in both encoder (`HandEncoder.Escape`) and parser payload scanner (`HandParser.ParsePayload`), enabling keys/values containing special characters.
+
+### Changed
+- **Enhanced Markdown List Parsing (`Level 4`)**: Key-value regex matcher now successfully parses markdown bullet lists (`-`, `*`, `•`) and bold key wrappers (`**key**: value`).
+- **Narrative Blockquote Stripping**: Parser body extraction (`ExtractBody`) now strips leading markdown blockquote characters (`>`) and matching spaces.
+
+### Fixed
+- **Code Coverage & Quality**: 100% coverage on core parser, encoder, record model, and resilience pipeline execution paths (89.2% overall per SonarQube). Cleaned up redundant defensive checks.
+- **ParsePayload Cognitive Complexity**: Refactored the manual character scanner (`TryConsumeEscape`, `ScanUntil`) to reduce cognitive complexity from 49 to <15 (SonarQube S3776).
+- **TryExtractJson Decomposition**: Split monolithic JSON extraction into `TryParseJsonBlock`, `BuildJsonPayload`, `ConvertJsonValue`, `ClassifyJsonPayload` — cognitive complexity from 25 to <15 (SonarQube S3776).
+- **NormaliseKey SourceGen**: Replaced `Regex.Replace` with `[GeneratedRegex] WhitespaceRegex()` to resolve SYSLIB1045.
+
 ## [0.2.0] - 2026-05-23
 
 ### Changed

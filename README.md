@@ -77,9 +77,10 @@ a sieve with increasingly larger holes:
 | 2 | **Recover** | Model wrapped it in markdown fences (` ``` `) or blockquotes (`>`) |
 | 3 | **Repair** | Fences stripped. Format recovered from inside the noise |
 | 4 | **Infer** | Model wrote plain prose: *"confidence: 0.87, answer: 42"* — regex extracts the fields and builds a valid wire message |
-| 5 | **Fallback** | Everything failed. Codec returns unstructured passthrough with `IsUnstructured=true`. Caller decides what to do |
+| 5 | **JSON** | Model fell back to flat JSON blocks: `{"value": "done"}` — JSON extraction parses fields and builds a valid wire message (opt-in) |
+| 6 | **Fallback** | Everything failed. Codec returns unstructured passthrough with `IsUnstructured=true`. Caller decides what to do |
 
-`HandResiliencePipeline.Parse()` **never returns null**. Falls through to Level 5.
+`HandResiliencePipeline.Parse()` **never returns null**. Falls through to Level 6.
 No try/catch needed at the call site. No HTTP 500 from a missing bracket.
 
 Level 4 also recovers `M|` Memo fields from prose — if the model writes *"Task type:
@@ -153,11 +154,14 @@ msg.GetDouble("C");   // 0.94
 
 // Resilience pipeline — never returns null
 var result = HandResiliencePipeline.Parse(rawModelOutput);
-// result.Level: 1=strict, 2=lenient, 3=markdown_strip, 4=semantic, 5=unstructured
+// result.Level: 1=strict, 2=lenient, 3=markdown_strip, 4=semantic, 5=json_extraction, 6=unstructured
 
 // Per-level access — each returns ParsedHandMessage (never null)
 var strict = HandResiliencePipeline.ParseStrict("R|V=56|C=0.94");
 // strict.IsUnstructured → false
+
+var json = HandResiliencePipeline.ParseJson("{ \"value\": \"done\" }");
+// json.Get("V") → "done"
 
 var semantic = HandResiliencePipeline.ParseSemantic("task: classify, confidence: 0.9");
 // semantic.Get("task") → "classify"
@@ -174,7 +178,7 @@ Four classes derived from observed model behaviour during probing:
 | `Reasoning` | CoT models (DeepSeek-R1, o1). Convergence via reasoning tokens. | Compact |
 | `External` | MCP tools, REST APIs, A2A bridges. Translation layer. | Debug |
 
-## Resilience pipeline (5-level degradation)
+## Resilience pipeline (6-level degradation)
 
 See **Pillar 3** above for the full description. Quick reference:
 
@@ -183,16 +187,18 @@ Level 1: Strict parse         — R|V=56|C=0.9
 Level 2: Lenient scan         — preamble + R|V=56
 Level 3: Markdown strip       — ```\nR|V=56\n```
 Level 4: Semantic extraction  — "confidence: 0.87, value: 42" or "Task type: classify..."
-Level 5: Passthrough          — unstructured (IsUnstructured=true)
+Level 5: JSON extraction      — {"status": "active", "value": "done"} (opt-in)
+Level 6: Passthrough          — unstructured (IsUnstructured=true)
 ```
 
-`HandResiliencePipeline.Parse()` never returns null. Falls through to Level 5.
+`HandResiliencePipeline.Parse()` never returns null. Falls through to Level 6.
 
 Each level is also exposed as a standalone method:
 - `ParseStrict(raw)` — Level 1
 - `ParseLenient(raw)` — Level 2
 - `ParseWithMarkdownStrip(raw)` — Level 3
 - `ParseSemantic(raw)` — Level 4
+- `ParseJson(raw)` — Level 5
 
 All per-level methods return `ParsedHandMessage` (never null). Check `IsUnstructured`
 to see if that level succeeded.

@@ -194,6 +194,40 @@ public sealed class HandParserTests
         var results = HandParser.ParseBatch("garbage1\ngarbage2\n");
         results.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void ParseLenient_WithMarkdownBlockquoteBody_StripsBlockquotePrefixes()
+    {
+        const string input = "R|V=hello\n> this is line 1\n>  this is line 2\n>this is line 3";
+        var parsed = HandParser.ParseLenient(input);
+        parsed.ShouldNotBeNull();
+        parsed!.Body.ShouldBe("this is line 1\nthis is line 2\nthis is line 3");
+    }
+
+    [Fact]
+    public void RoundTrip_EscapedFields_ParsesBackIdentical()
+    {
+        var payload = new[]
+        {
+            ("key1", "val1|val2"),
+            ("key=2", "val3"),
+            ("key\\3", "val4\\val5"),
+            ("key|4=5", "val6|val7=val8")
+        };
+
+        string encoded = HandEncoder.Result(payload);
+        encoded.ShouldContain("key1=val1\\|val2");
+        encoded.ShouldContain("key\\=2=val3");
+        encoded.ShouldContain("key\\\\3=val4\\\\val5");
+        encoded.ShouldContain("key\\|4\\=5=val6\\|val7\\=val8");
+
+        var parsed = HandParser.Parse(encoded);
+        parsed.ShouldNotBeNull();
+        parsed!.Get("key1").ShouldBe("val1|val2");
+        parsed.Get("key=2").ShouldBe("val3");
+        parsed.Get("key\\3").ShouldBe("val4\\val5");
+        parsed.Get("key|4=5").ShouldBe("val6|val7=val8");
+    }
 }
 
 public sealed class ParsedHandMessageTests
@@ -319,13 +353,13 @@ public sealed class HandEncoderTests
     [Fact]
     public void Probe_EncodesCorrectly()
     {
-        HandEncoder.Probe("2+2=4").ShouldBe("P|q=2+2=4");
+        HandEncoder.Probe("2+2=4").ShouldBe("P|q=2+2\\=4");
     }
 
     [Fact]
     public void Probe_WithAck_EncodesCorrectly()
     {
-        HandEncoder.Probe("2+2=4", ack: true).ShouldBe("P|q=2+2=4|ack=true");
+        HandEncoder.Probe("2+2=4", ack: true).ShouldBe("P|q=2+2\\=4|ack=true");
     }
 
     [Fact]
@@ -668,7 +702,101 @@ public sealed class MemoBuilderTests
             .Build();
         encoded.ShouldBe("M|task_type=classify");
     }
+
+    [Fact]
+    public void HandEncoder_UnknownPerformative_ThrowsException()
+    {
+        var method = typeof(HandEncoder).GetMethod("Encode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        method.ShouldNotBeNull();
+        var ex = Should.Throw<System.Reflection.TargetInvocationException>(() =>
+        {
+            method.Invoke(null, new object[] { (Performative)99, new (string Key, string Value)[] { ("key", "val") } });
+        });
+        ex.InnerException.ShouldBeOfType<ArgumentException>();
+    }
+
+    [Fact]
+    public void ParseWithFirstLineExtraction_CleanValidMessage_ReturnsStrictParsed()
+    {
+        var result = HandParser.ParseWithFirstLineExtraction("R|V=hello");
+        result.ShouldNotBeNull();
+        result.Performative.ShouldBe(Performative.Result);
+        result.Get("V").ShouldBe("hello");
+    }
+
+    [Theory]
+    [InlineData("I|t=type|a=act", Performative.Instruction)]
+    [InlineData("P|q=quest", Performative.Probe)]
+    [InlineData("E|code=400|msg=err", Performative.Error)]
+    [InlineData("A|content=ans", Performative.Answer)]
+    public void ParseLenient_OtherPerformatives_ParsesCorrectly(string raw, Performative expected)
+    {
+        var result = HandParser.ParseLenient(raw);
+        result.ShouldNotBeNull();
+        result.Performative.ShouldBe(expected);
+    }
+
+    [Fact]
+    public void ParsePayload_NullOrEmpty_ReturnsEmptyDictionary()
+    {
+        var method = typeof(HandParser).GetMethod("ParsePayload", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        method.ShouldNotBeNull();
+        var result = method.Invoke(null, new object[] { "" });
+        result.ShouldBeOfType<Dictionary<string, string>>();
+        ((Dictionary<string, string>)result).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("k\\a=v", "k\\a", "v")]
+    [InlineData("k=v\\a", "k", "v\\a")]
+    [InlineData("k\\", "k\\", "")]
+    [InlineData("k=v\\", "k", "v\\")]
+    public void ParsePayload_NonEscapeBackslashes_PreservesBackslash(string input, string expectedKey, string expectedVal)
+    {
+        var method = typeof(HandParser).GetMethod("ParsePayload", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        method.ShouldNotBeNull();
+        var result = (Dictionary<string, string>)method.Invoke(null, new object[] { input })!;
+        result.ContainsKey(expectedKey).ShouldBeTrue();
+        result[expectedKey].ShouldBe(expectedVal);
+    }
+
+    [Fact]
+    public void ParsedHandMessage_Getters_ReturnCorrectValues()
+    {
+        var payload = new Dictionary<string, string>
+        {
+            { "str", "hello" },
+            { "int", "123" },
+            { "double", "12.34" },
+            { "bool_true", "true" },
+            { "bool_false", "false" },
+            { "invalid_num", "abc" }
+        };
+        var msg = new ParsedHandMessage(Performative.Result, "raw_payload", payload, "raw_message");
+
+        msg.RawPayload.ShouldBe("raw_payload");
+        msg.RawMessage.ShouldBe("raw_message");
+        msg.Get("str").ShouldBe("hello");
+        msg.Get("missing").ShouldBeNull();
+
+        msg.GetInt("int").ShouldBe(123);
+        msg.GetInt("invalid_num").ShouldBeNull();
+        msg.GetInt("missing").ShouldBeNull();
+
+        msg.GetDouble("double").ShouldBe(12.34);
+        msg.GetDouble("invalid_num").ShouldBeNull();
+        msg.GetDouble("missing").ShouldBeNull();
+
+        msg.GetDoubleOr("double", 1.0).ShouldBe(12.34);
+        msg.GetDoubleOr("missing", 5.67).ShouldBe(5.67);
+
+        msg.GetBool("bool_true").ShouldBe(true);
+        msg.GetBool("bool_false").ShouldBe(false);
+        msg.GetBool("invalid_num").ShouldBeNull();
+        msg.GetBool("missing").ShouldBeNull();
+    }
 }
+
 
 public sealed class HandBatchPartialExceptionTests
 {
