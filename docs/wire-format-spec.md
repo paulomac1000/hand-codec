@@ -46,7 +46,7 @@ The grammar is intentionally permissive on `value` (any printable except `|`) an
 | `E` Error | `E\|code=500\|msg=Connection refused` | `\|` in msg → encoder throws |
 | `B` Batch | `B\|count=3\|t=summarize,extract,classify\|d=...` | Documents Base64-encoded |
 | `A` Answer | `A\|content=Paris` | No confidence required |
-| `M` Memo | `M\|L=2\|tx=classify\|pr=high` | Inter-agent context |
+| `M` Memo | `M\|L=2\|e7=none\|s9=low` | Keys are application-defined; parser accepts any `[A-Za-z0-9_]+`. No key registry. |
 
 ## Probe canonical form — `key=value` always
 

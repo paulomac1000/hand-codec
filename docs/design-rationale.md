@@ -112,6 +112,18 @@ The original codebase had negotiation caches, drift detection workers, feature f
 
 If you need negotiation or probing, build it on top. The codec gives you the parse/encode primitives and the `AgentClass` enum to key your policy on.
 
+## Why arbitrary keys work — the parser is transparent
+
+The wire format grammar defines keys as `1*( ALPHA | DIGIT | "_" )`. That is the only constraint. HandCodec has:
+
+- **No key registry** — unlike Protocol Buffers or gRPC, there is no `.proto` file declaring valid field names.
+- **No schema validation** — the parser never rejects a key because it "doesn't belong" to a performative.
+- **No semantic layer** — the codec doesn't know or care what `tx` or `e7` means. It just parses `key=value` pairs.
+
+This design choice enables the Codec G experiment (see [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist)): keys are deliberately meaningless two-character strings (`e7`, `s9`, `p3`, `k2`) with zero semantic content. A small local model (7B–8B) receives `M|` wire with these keys and no legend. It learns the *structural pattern* through implicit priming — a single example exchange in the conversation history — and reproduces the format with valid, correctly structured output.
+
+The parser doesn't care. It reads `e7=none` exactly the same as `task_type=classify`. The meaning lives in the consuming application, not in the codec.
+
 ## Phase 2+ candidates (intentionally deferred)
 
 These items appear in `hand-simplification-plan.md` and are valuable, but were judged too speculative to ship in v1:

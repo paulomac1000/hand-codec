@@ -162,5 +162,10 @@ By design, the following are not part of the codec:
 - `DriftWorkerService`, bulkhead decorators, feature-flagged variants
 - Probing engine
 - Any Ollama, OpenRouter, MongoDB, or LanceDB binding
+- **Key registry or schema validation** — keys are opaque strings (`[A-Za-z0-9_]+`).
+  The parser has no knowledge of which keys are "allowed" for which performative.
+  This is a feature: consuming applications define their own key schemes, including
+  deliberately meaningless random keys (see Codec G experiment in Hybrid Therapist),
+  and the codec passes them through without interpretation.
 
 These belong to the runtime layer (`HandRuntime`) or the consuming application. The codec is stateless and dependency-free so it can ship independently as a NuGet package.

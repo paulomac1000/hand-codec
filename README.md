@@ -65,6 +65,23 @@ The `[SYSTEM_PROTOCOL_ACK]` text is deliberately **non-domain** — it contains 
 task-specific words, no domain vocabulary. This is a **stateless cache**: every call
 starts fresh with the same ping. No persistent negotiation state. No context pollution.
 
+### Codec G — Why Keys Don't Need Meaning
+
+The parser treats keys as opaque strings — any `[A-Za-z0-9_]+` is valid. There is
+no key registry, no schema validation, no semantic interpretation. This means
+consuming applications can define *any* key scheme.
+
+The Codec G experiment in [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist)
+proves how far this goes: keys are deliberately meaningless (`e7`, `s9`, `p3`, `k2`)
+— they carry zero semantic content. The model receives `M|L=2|e7=none|s9=low` with
+no legend, no format instruction, no key glossary. It learns the *shape* of the
+format (`performative|key=value|key=value`) exclusively from examples in the
+conversation history — and produces valid wire output.
+
+This works because small transformers are pattern-matching engines, not semantic
+reasoners. They latch onto the structural template faster than the meaning of field
+names. HandCodec doesn't care what the keys are called — it just parses them.
+
 ### Pillar 3 — The Resilience Ladder
 
 This is what kills JSON. H.A.N.D. **assumes** that cheap, small models (7B–8B parameters,
