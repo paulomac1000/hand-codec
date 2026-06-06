@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\HandCodec\HandCodec.csproj" />
+    <ProjectReference Include="..\..\src\HandRuntime\HandRuntime.csproj" />
   </ItemGroup>
 
 </Project>
