@@ -1,5 +1,5 @@
 ---
-description: HandCodec design rationale — why pipe-delimited key=value, why 5 resilience levels, why 4 AgentClasses. Synthesised from audit findings
+description: HandCodec design rationale — why pipe-delimited key=value, why multi-level resilience, why 4 AgentClasses. Synthesised from audit findings
 doc_id: ref.hand-codec-rationale
 type: ref
 status: active
@@ -28,17 +28,20 @@ The wire format is optimised for what small transformers do well — predict the
 
 Three independent audits in `input.txt` reached the same conclusion: the format is the most valuable part of the protocol. Everything else is in service of the format.
 
-## Why 5 resilience levels
+## Why 6 resilience levels
 
-The original H.A.N.D. protocol assumed models would emit valid wire format on every call. That assumption breaks on small local models, on long-context degradation, and on outputs that get wrapped in markdown by chat frontends. The 5-level ladder converts "parse error" from a fatal condition into a metric:
+The original H.A.N.D. protocol assumed models would emit valid wire format on every call. That assumption breaks on small local models, on long-context degradation, and on outputs that get wrapped in markdown by chat frontends. The 6-level ladder converts "parse error" from a fatal condition into a metric:
 
 1. **Strict** — happy path; cost is zero.
 2. **Lenient** — model emitted preamble. Parse the right line.
 3. **MarkdownStrip** — model wrapped output in ` ``` ` fences. Unwrap, then lenient.
 4. **SemanticExtraction** — model gave free-form prose with hints (`confidence: 0.87`). Generic key:value regex extracts what we can.
-5. **Passthrough** — give up structurally, but keep the raw text. Caller decides.
+5. **JsonExtraction** — model fell back to flat JSON blocks (e.g. `{"value": "done"}`). JSON extraction parses fields and builds a valid wire message.
+6. **Passthrough** — give up structurally, but keep the raw text. Caller decides.
 
-Production behaviour: log the level on every call. A rising level distribution is the **early-warning signal** for model drift, prompt regression, or upstream provider issues.
+JSON extraction exists as a distinct level because JSON blocks are structurally different from the prose key:value hints that SemanticExtraction handles — they have clear delimiters (`{`, `}`) and require a separate parsing strategy. It is opt-in because parsing random JSON from LLM output can produce false positives: JSON appearing naturally inside prose examples or code blocks would be incorrectly consumed.
+
+Production behaviour: log the level on every call. A rising level distribution across all six levels is the **early-warning signal** for model drift, prompt regression, or upstream provider issues.
 
 ## Why 4 AgentClasses (down from 9)
 

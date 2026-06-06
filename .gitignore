@@ -45,6 +45,9 @@ appsettings.Development.json
 coverage-report/
 semgrep.sarif
 
+# OMO (Prometheus/Sisyphus) artifacts
+.omo/
+
 # SonarQube scanner
 .sonarqube/
 # Local dev tool — generated externally, not part of distributed library

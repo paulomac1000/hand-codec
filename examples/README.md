@@ -67,15 +67,17 @@ var fenced = HandResiliencePipeline.Parse("""
 fenced.Level;       // 3
 
 // Pure prose — semantic extraction (level 4)
+// Without AllEnabled, semantic extraction is disabled by default.
+// Pass AllEnabled to enable all opt-in stages.
 var prose = HandResiliencePipeline.Parse(
     "confidence: 0.87, value: task completed successfully",
     HandResilientOptions.AllEnabled);
 prose.Level;        // 4
 prose.Message.Get("V");  // "task completed successfully"
 
-// Total failure — passthrough (level 5, IsUnstructured=true)
+// Total failure — passthrough (level 6, IsUnstructured=true)
 var garbage = HandResiliencePipeline.Parse("the cat sat on the mat");
-garbage.Level;                        // 5
+garbage.Level;                        // 6
 garbage.Message.IsUnstructured;       // true
 garbage.Message.RawMessage;           // "the cat sat on the mat"
 ```
@@ -95,6 +97,10 @@ stripped.Get("V");      // "hello"
 
 var semantic = HandResiliencePipeline.ParseSemantic("Task: classify, Priority: high");
 semantic.Get("task");   // "classify"
+
+var jsonParsed = HandResiliencePipeline.ParseJson("{\"status\": \"active\", \"value\": \"done\"}");
+jsonParsed.Get("status");  // "active"
+jsonParsed.Get("V");       // "done"  (JSON "value" is mapped to wire format "V")
 
 // On failure, each returns IsUnstructured=true — never null
 var failed = HandResiliencePipeline.ParseStrict("plain junk");

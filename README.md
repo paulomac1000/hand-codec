@@ -119,12 +119,12 @@ a sieve with increasingly larger holes:
 
 | Level | Stage | What it recovers from |
 |-------|-------|----------------------|
-| 1 | **Parse** | Model emitted perfect `R\|V=56\|C=0.94` |
-| 2 | **Recover** | Model wrapped it in markdown fences (` ``` `) or blockquotes (`>`) |
-| 3 | **Repair** | Fences stripped. Format recovered from inside the noise |
-| 4 | **Infer** | Model wrote plain prose: *"confidence: 0.87, answer: 42"* — regex extracts the fields and builds a valid wire message |
-| 5 | **JSON** | Model fell back to flat JSON blocks: `{"value": "done"}` — JSON extraction parses fields and builds a valid wire message (opt-in) |
-| 6 | **Fallback** | Everything failed. Codec returns unstructured passthrough with `IsUnstructured=true`. Caller decides what to do |
+| 1 | **Strict parse** | Direct regex match on `^[RIPCBEAM]\|` |
+| 2 | **Lenient scan** | Preamble before format; line-scan finds first performative |
+| 3 | **Markdown strip** | Model wrapped in fences (`` ``` ``) or blockquotes (`>`) |
+| 4 | **Semantic extraction** | Model wrote plain prose: *"confidence: 0.87, answer: 42"* — regex extracts the fields and builds a valid wire message |
+| 5 | **JSON extraction** | Model fell back to flat JSON blocks: `{"value": "done"}` — JSON extraction parses fields and builds a valid wire message (opt-in) |
+| 6 | **Passthrough** | Everything failed. Codec returns unstructured passthrough with `IsUnstructured=true`. Caller decides what to do |
 
 `HandResiliencePipeline.Parse()` **never returns null**. Falls through to Level 6.
 No try/catch needed at the call site. No HTTP 500 from a missing bracket.
@@ -273,7 +273,7 @@ applications. The codec itself stays generic.
 
 - [docs/architecture.md](docs/architecture.md) — four building blocks: encoder, parser, resilience pipeline, MemoBuilder
 - [docs/wire-format-spec.md](docs/wire-format-spec.md) — grammar, performatives, field rules, batch boundaries
-- [docs/design-rationale.md](docs/design-rationale.md) — why pipe-delimited, why 5 levels, why 4 AgentClasses
+- [docs/design-rationale.md](docs/design-rationale.md) — why pipe-delimited, why 6-level resilience ladder, why 4 AgentClasses
 - [examples/README.md](examples/README.md) — runnable usage patterns
 
 Documentation follows the [AI-First Documentation Standard (AFDS)](https://github.com/paulomac1000/ai-skills/tree/main/skills/afds-doc-writer).

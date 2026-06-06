@@ -19,7 +19,7 @@ HandCodec is **only the codec**. No negotiation, no probing, no telemetry. Four 
 ┌────────────────────────────────────────────────────────────────┐
 │  HandEncoder        Build wire format from typed inputs        │
 │  HandParser         Recover structure from model output        │
-│  HandResiliencePipeline  5-level degradation ladder            │
+│  HandResiliencePipeline  6-level degradation ladder            │
 │  MemoBuilder        Fluent builder for the M| performative     │
 └────────────────────────────────────────────────────────────────┘
         │
@@ -85,32 +85,56 @@ P|2+2=4|ACK=True     ✗ old-style, not produced by encoder
 
 `HandEncoder.Probe(question, ack)` always emits the canonical form. The parser is permissive — `ack=True` (capital T) parses fine, but the encoder is opinionated.
 
-## Resilience pipeline — 5 levels
+## Resilience pipeline — 6 levels
 
 ```
-Level 1  StrictParseStage      Direct regex against ^[RIPCBEAM]\|
-Level 2  LenientParseStage     Line-scan; tolerates preamble
-Level 3  MarkdownStripStage    Strip ```fences``` then re-parse
+Level 1  StrictParseStage         Direct regex against ^[RIPCBEAM]\|
+Level 2  LenientParseStage        Line-scan; tolerates preamble
+Level 3  MarkdownStripStage       Strip ```fences``` then re-parse
 Level 4  SemanticExtractionStage  Generic key:value extraction from prose
-Level 5  Passthrough           Unstructured raw text (always succeeds)
+Level 5  JsonExtractionStage      Extract key-value from flat JSON blocks (opt-in)
+Level 6  Passthrough              Unstructured raw text (always succeeds)
 ```
 
-`HandResiliencePipeline.Parse()` **never returns null**. If level 1-4 all fail, level 5 wraps the raw text in `ParsedHandMessage.Unstructured(raw)` and the caller can decide whether to fail open or retry.
+`HandResiliencePipeline.Parse()` **never returns null**. If level 1-5 all fail, level 6 wraps the raw text in `ParsedHandMessage.Unstructured(raw)` and the caller can decide whether to fail open or retry.
 
 Each level returns a `ResilienceResult(Level, Message, ElapsedMs)`. Use the `Level` field as a degradation signal — if you see level 4 firing consistently, the model is drifting and you should re-probe.
 
-### When Level 5 fires — caller strategies
+### Opt-in stages
 
-Level 5 (passthrough, `IsUnstructured == true`) is not a failure — it is a signal.
+Three of the six levels are controlled by `HandResilientOptions` flags:
+
+| Level | Stage | Default | Flag |
+|-------|-------|---------|------|
+| 3 | Markdown strip | ON (`true`) | `EnableMarkdownStrip` |
+| 4 | Semantic extraction | OFF (`false`) | `EnableSemanticExtraction` |
+| 5 | JSON extraction | OFF (`false`) | `EnableJsonExtraction` |
+
+Levels 1, 2, and 6 (passthrough) are always active — `IsStageEnabled` returns `true` regardless of options.
+
+```csharp
+// Default: Level 3 ON, Levels 4–5 OFF
+var parsed = HandResiliencePipeline.Parse(raw, HandResilientOptions.Default);
+
+// All optional stages enabled
+var parsed = HandResiliencePipeline.Parse(raw, HandResilientOptions.AllEnabled);
+```
+
+**Per-level methods bypass options entirely.** Calling `HandResiliencePipeline.ParseSemantic(raw)` always runs semantic extraction regardless of the flag — the options only gate the full-ladder `Parse()` call.
+
+### When Level 6 fires — caller strategies
+
+Level 6 (passthrough, `IsUnstructured == true`) is not a failure — it is a signal.
 What to do depends on the degradation pattern:
 
 | Degradation pattern | Action |
-|---|---|
-| Single Level 5 among mostly Level 1–2 | One-off noise — accept raw text, log metric |
-| Level 5 > 10% of calls | Model is losing format — drop temperature by 0.1–0.2, re-probe |
+|---|---|---|
+| Single Level 6 among mostly Level 1–2 | One-off noise — accept raw text, log metric |
+| Level 6 > 10% of calls | Model is losing format — drop temperature by 0.1–0.2, re-probe |
 | Spikes after prompt change | Roll back the prompt — the new prompt broke format compliance |
-| Mixed Level 4 + Level 5 | Model is drifting — re-run System Ping to re-establish priming |
-| 100% Level 5 on all calls | Model ignores the format entirely — fall back to plaintext pipeline or switch model class |
+| Mixed Level 4 + Level 6 | Model is drifting — re-run System Ping to re-establish priming |
+| Mixed Level 5 (JSON) | Model is trending toward JSON output — consider enabling `EnableJsonExtraction = true` |
+| 100% Level 6 on all calls | Model ignores the format entirely — fall back to plaintext pipeline or switch model class |
 
 
 ### Per-level access
@@ -118,13 +142,14 @@ What to do depends on the degradation pattern:
 Each degradation level is also exposed as a standalone public method:
 
 ```csharp
-ParsedHandMessage strict  = HandResiliencePipeline.ParseStrict(raw);
-ParsedHandMessage lenient = HandResiliencePipeline.ParseLenient(raw);
+ParsedHandMessage strict   = HandResiliencePipeline.ParseStrict(raw);
+ParsedHandMessage lenient  = HandResiliencePipeline.ParseLenient(raw);
 ParsedHandMessage stripped = HandResiliencePipeline.ParseWithMarkdownStrip(raw);
 ParsedHandMessage semantic = HandResiliencePipeline.ParseSemantic(raw);
+ParsedHandMessage json     = HandResiliencePipeline.ParseJson(raw);
 ```
 
-All four return `ParsedHandMessage` (never null). Check `IsUnstructured` to determine if that level succeeded.
+All five return `ParsedHandMessage` (never null). Check `IsUnstructured` to determine if that level succeeded. Per-level methods **bypass** the `HandResilientOptions` flags — you can call `ParseJson()` even when `EnableJsonExtraction` is `false`.
 
 ## AgentClass — four behavioural classes
 

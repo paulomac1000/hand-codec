@@ -64,7 +64,7 @@ public static partial class HandResiliencePipeline
 
     /// <summary>
     /// Runs the degradation ladder and returns the first successful parse level.
-    /// Never returns null — falls through to Level 5 (unstructured passthrough).
+    /// Never returns null — falls through to Level 6 (unstructured passthrough).
     /// </summary>
     public static ResilienceResult Parse(string rawOutput, HandResilientOptions? options = null)
     {

@@ -73,7 +73,7 @@ string rawModelOutput = /* response from Ollama/OpenAI */;
 var result = HandResiliencePipeline.Parse(rawModelOutput);
 
 // result.Level tells you how much work the parser did:
-// 1 = clean, 2 = preamble, 3 = markdown-fenced, 4 = semantic extraction, 5 = unstructured
+// 1 = clean, 2 = preamble, 3 = markdown-fenced, 4 = semantic extraction, 5 = json, 6 = unstructured
 
 if (result.Level >= 4)
     LogWarning($"Model degradation: Level {result.Level}");
@@ -81,6 +81,9 @@ if (result.Level >= 4)
 string content = result.Message.Get("V") ?? result.Message.RawMessage;
 double conf = result.Message.GetDoubleOr("C", 0.5);
 ```
+If `EnableJsonExtraction` is enabled in the pipeline options, Level 5 also attempts
+JSON block extraction — parsing flat `{"key": "value"}` blocks to recover wire fields
+from models that abandon the pipe-delimited format entirely.
 
 ### 4. Memo Routing Between Agents
 
@@ -146,7 +149,7 @@ See [Usage Examples](../examples/README.md) for standalone code snippets of each
 - **Pipe characters in values break parsing.** Base64-encode any value that may contain `|`.
   Use `HandEncoder.BatchWithDocuments()` for batch payloads.
 - **Resilience level is a metric, not an error.** Track it. Rising levels = model drift.
-  See [Architecture](architecture.md#when-level-5-fires--caller-strategies) for Level 5 strategies.
+  See [Architecture](architecture.md#when-level-6-fires--caller-strategies) for degradation strategies.
 - **The codec is stateless.** Do not expect it to remember previous messages, manage
   conversation state, or call LLMs. That's the orchestrator's job.
 
@@ -154,6 +157,6 @@ See [Usage Examples](../examples/README.md) for standalone code snippets of each
 
 - [Architecture](architecture.md) — the four building blocks in detail
 - [Wire Format Specification](wire-format-spec.md) — grammar, invariants, behavioural guarantees
-- [Design Rationale](design-rationale.md) — why pipe-delimited, why 5 levels, why 4 classes
+- [Design Rationale](design-rationale.md) — why pipe-delimited, why 6-level resilience, why 4 classes
 - [Usage Examples](../examples/README.md) — standalone code snippets for each API
 - [Hybrid Therapist](https://github.com/paulomac1000/hybrid-therapist) — production pipeline using HandCodec
