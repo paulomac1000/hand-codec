@@ -1,3 +1,16 @@
+---
+description: Execution plan for fixing documentation resilience level consistency after v0.3.0 JSON Extraction addition
+doc_id: plan.docs-audit-fix
+type: plan
+status: completed
+ttl_days: 30
+stability: transient
+ai_scope: editable
+last_verified: 2026-06-06
+verified_by: Sisyphus
+fitness_score: 1.0
+---
+
 # Documentation Audit Fix — Resilience Level Consistency
 
 ## TL;DR
