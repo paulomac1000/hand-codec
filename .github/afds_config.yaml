@@ -75,7 +75,7 @@ root_files:
     min_line_count: 10
 
 default_paths: [docs/]
-excluded_dirs: [archived, archive, omo]
+excluded_dirs: [archived, archive]
 exempt_files:
   - docs/architecture.md
   - docs/wire-format-spec.md
